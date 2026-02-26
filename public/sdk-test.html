@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SDK Test Page</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; padding: 40px; background: #f9fafb; }
+    h1#hero-title { font-size: 32px; margin-bottom: 16px; }
+    p { color: #666; margin-bottom: 24px; }
+    .nav-menu { display: flex; gap: 16px; padding: 12px 20px; background: #fff; border-radius: 8px; margin-bottom: 24px; border: 1px solid #e5e7eb; }
+    .nav-menu a { text-decoration: none; color: #333; font-size: 14px; }
+    #get-started { padding: 12px 24px; background: #111; color: #fff; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
+    #get-started:hover { background: #333; }
+    .controls { margin-top: 40px; padding: 20px; background: #fff; border-radius: 8px; border: 1px solid #e5e7eb; }
+    .controls h3 { margin-bottom: 12px; }
+    .controls button { margin: 4px; padding: 8px 16px; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; font-size: 13px; }
+    .controls button:hover { background: #f3f4f6; }
+    .log { margin-top: 16px; padding: 12px; background: #f3f4f6; border-radius: 6px; font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+
+  <h1 id="hero-title">Welcome to My App</h1>
+  <p>This is a test page to verify the OnTheWay SDK end-to-end flow.</p>
+
+  <nav class="nav-menu">
+    <a href="#">Home</a>
+    <a href="#">Features</a>
+    <a href="#">Pricing</a>
+    <a href="#">Docs</a>
+  </nav>
+
+  <button id="get-started">Get Started</button>
+
+  <div class="controls">
+    <h3>SDK Controls</h3>
+    <button onclick="startTour()">▶ Start Tour Manually</button>
+    <button onclick="resetTour()">↻ Reset Tour</button>
+    <button onclick="showTasks()">📋 List Tasks</button>
+    <button onclick="checkReady()">✓ Check Ready</button>
+    <div class="log" id="log">Waiting for SDK to load...</div>
+  </div>
+
+  <!-- OnTheWay SDK — change the project ID and data-api to match your setup -->
+  <script src="/sdk.js" data-project="6fea4487-17a3-49f5-ad62-1689cf566b57" data-api="http://localhost:3001/api"></script>
+
+  <script>
+    var logEl = document.getElementById('log');
+    function log(msg) {
+      logEl.textContent += '\n' + new Date().toLocaleTimeString() + ' ' + msg;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // Wait for SDK
+    var checkInterval = setInterval(function() {
+      if (window.ontheway && window.ontheway.isReady()) {
+        clearInterval(checkInterval);
+        log('✅ SDK loaded! Tasks: ' + window.ontheway.getTasks().length);
+        var tasks = window.ontheway.getTasks();
+        tasks.forEach(function(t) {
+          log('  → ' + t.slug + ' (' + t.trigger + ', ' + t.steps.length + ' steps)');
+        });
+      }
+    }, 200);
+
+    setTimeout(function() { clearInterval(checkInterval); }, 10000);
+
+    function startTour() {
+      if (!window.ontheway) { log('❌ SDK not loaded'); return; }
+      log('Starting welcome-tour...');
+      window.ontheway.start('welcome-tour');
+    }
+
+    function resetTour() {
+      if (!window.ontheway) { log('❌ SDK not loaded'); return; }
+      window.ontheway.reset('welcome-tour');
+      log('Tour reset');
+    }
+
+    function showTasks() {
+      if (!window.ontheway) { log('❌ SDK not loaded'); return; }
+      var tasks = window.ontheway.getTasks();
+      log('Tasks (' + tasks.length + '):');
+      tasks.forEach(function(t) { log('  ' + t.slug + ': ' + t.steps.length + ' steps'); });
+    }
+
+    function checkReady() {
+      log('Ready: ' + (window.ontheway ? window.ontheway.isReady() : 'SDK not found'));
+    }
+  </script>
+</body>
+</html>
