@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getProjects, getCurrentUser } from '@/lib/data'
-import { DashboardOnboarding, ReplayOnboardingButton } from '@/components/DashboardOnboarding'
+import { DashboardOnboarding, ReplayOnboardingButton, HelpFloatingMenu } from '@/components/DashboardOnboarding'
 
 export default async function DashboardPage() {
   const user = await getCurrentUser()
@@ -18,6 +18,7 @@ export default async function DashboardPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Onboarding tour for new users */}
       <DashboardOnboarding />
+      <HelpFloatingMenu />
 
       <header className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-3 sm:py-4 flex justify-between items-center">

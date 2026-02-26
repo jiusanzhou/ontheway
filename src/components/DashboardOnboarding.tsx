@@ -1,20 +1,30 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { driver } from 'driver.js'
 import 'driver.js/dist/driver.css'
 
 const ONBOARDING_KEY = 'otw_dashboard_onboarded'
 
+// 全局事件，用于外部触发 replay
+const REPLAY_EVENT = 'otw:replay-onboarding'
+
 export function DashboardOnboarding() {
   const [show, setShow] = useState(false)
 
   useEffect(() => {
-    // 只对新用户展示
-    if (localStorage.getItem(ONBOARDING_KEY)) return
-    // 等页面渲染完
-    const timer = setTimeout(() => setShow(true), 500)
-    return () => clearTimeout(timer)
+    // 新用户自动触发
+    if (!localStorage.getItem(ONBOARDING_KEY)) {
+      const timer = setTimeout(() => setShow(true), 500)
+      return () => clearTimeout(timer)
+    }
+  }, [])
+
+  // 监听 replay 事件
+  useEffect(() => {
+    const handler = () => setShow(true)
+    window.addEventListener(REPLAY_EVENT, handler)
+    return () => window.removeEventListener(REPLAY_EVENT, handler)
   }, [])
 
   useEffect(() => {
@@ -92,18 +102,95 @@ export function DashboardOnboarding() {
 }
 
 /**
- * 重置 onboarding 状态（用于测试）
+ * 重置并重播 onboarding
  */
 export function ReplayOnboardingButton() {
   return (
     <button
       onClick={() => {
         localStorage.removeItem(ONBOARDING_KEY)
-        window.location.reload()
+        window.dispatchEvent(new Event(REPLAY_EVENT))
       }}
       className="text-xs text-gray-400 hover:text-gray-600"
     >
       Replay tour
     </button>
+  )
+}
+
+/**
+ * 浮动帮助菜单
+ */
+export function HelpFloatingMenu() {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    if (open) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const startTour = () => {
+    setOpen(false)
+    localStorage.removeItem(ONBOARDING_KEY)
+    window.dispatchEvent(new Event(REPLAY_EVENT))
+  }
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50"
+    >
+      {open && (
+        <div className="absolute bottom-14 right-0 w-56 bg-white rounded-xl shadow-xl border overflow-hidden mb-2">
+          <div className="px-4 py-3 border-b font-medium text-sm">Help & Guides</div>
+          <div className="py-1">
+            <button
+              onClick={startTour}
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 flex items-center gap-2"
+            >
+              <span>🛤️</span>
+              <div>
+                <div className="font-medium">Product Tour</div>
+                <div className="text-xs text-gray-400">Learn how OnTheWay works</div>
+              </div>
+            </button>
+            <a
+              href="/docs"
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 flex items-center gap-2"
+            >
+              <span>📖</span>
+              <div>
+                <div className="font-medium">Documentation</div>
+                <div className="text-xs text-gray-400">SDK reference & guides</div>
+              </div>
+            </a>
+            <a
+              href="/demo"
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 flex items-center gap-2"
+            >
+              <span>🎯</span>
+              <div>
+                <div className="font-medium">Live Demo</div>
+                <div className="text-xs text-gray-400">See a tour in action</div>
+              </div>
+            </a>
+          </div>
+        </div>
+      )}
+
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-black text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center text-lg"
+        aria-label="Help"
+      >
+        ?
+      </button>
+    </div>
   )
 }
