@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useParams } from 'next/navigation'
 
 interface Step {
   id: string
@@ -11,127 +11,147 @@ interface Step {
   content: string
   position: 'top' | 'bottom' | 'left' | 'right' | 'auto'
   spotlight: boolean
+  url?: string
 }
 
-interface RecordedStep {
-  selector: string
-  tagName: string
-  innerText?: string
-  timestamp: number
-}
+const CHANNEL_NAME = 'otw-recorder'
 
 export default function NewTaskPage() {
-  const searchParams = useSearchParams()
-  const sessionFromUrl = searchParams.get('session')
-  
+  const params = useParams()
+  const projectId = params.id as string
+
   const [taskName, setTaskName] = useState('')
   const [taskSlug, setTaskSlug] = useState('')
   const [targetUrl, setTargetUrl] = useState('')
   const [trigger, setTrigger] = useState<'manual' | 'auto' | 'first-visit'>('manual')
   const [steps, setSteps] = useState<Step[]>([])
   const [selectedStep, setSelectedStep] = useState<string | null>(null)
-  
-  // 录制状态
-  const [sessionId, setSessionId] = useState<string | null>(sessionFromUrl)
-  const [isRecording, setIsRecording] = useState(false)
-  const [recordingStatus, setRecordingStatus] = useState<'idle' | 'waiting' | 'connected' | 'stopped'>('idle')
+  const [mobileView, setMobileView] = useState<'config' | 'editor'>('config')
 
-  // 从 SSE 接收录制的步骤
+  // Recording state
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [recordingMode, setRecordingMode] = useState<'idle' | 'snippet' | 'proxy'>('idle')
+  const [recorderConnected, setRecorderConnected] = useState(false)
+  const [recorderUrl, setRecorderUrl] = useState('')
+  const [showSnippet, setShowSnippet] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const channelRef = useRef<BroadcastChannel | null>(null)
+
+  // Auto-generate slug from name
   useEffect(() => {
-    if (!sessionId || recordingStatus === 'stopped') return
-
-    const eventSource = new EventSource(`/api/recorder/ws?session=${sessionId}`)
-    
-    eventSource.onopen = () => {
-      console.log('[SSE] Connected')
+    if (taskName && !taskSlug) {
+      setTaskSlug(taskName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''))
     }
-    
-    eventSource.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data)
-        
-        if (msg.type === 'init') {
-          setRecordingStatus('connected')
-          setTargetUrl(msg.data.url)
-        } else if (msg.type === 'step') {
-          const recorded: RecordedStep = msg.data
-          const newStep: Step = {
-            id: Date.now().toString(),
-            selector: recorded.selector,
-            title: `Step ${steps.length + 1}`,
-            content: recorded.innerText?.slice(0, 50) || 'Click here to continue',
-            position: 'auto',
-            spotlight: true
-          }
-          setSteps(prev => {
-            const updated = [...prev, newStep]
-            setSelectedStep(newStep.id)
-            return updated
-          })
-        } else if (msg.type === 'sync') {
-          // 同步已有步骤
-          const existingSteps = msg.steps.map((s: RecordedStep, i: number) => ({
-            id: s.timestamp.toString(),
-            selector: s.selector,
-            title: `Step ${i + 1}`,
-            content: s.innerText?.slice(0, 50) || 'Click here',
-            position: 'auto' as const,
-            spotlight: true
-          }))
-          setSteps(existingSteps)
-          if (existingSteps.length > 0) {
-            setSelectedStep(existingSteps[0].id)
-          }
-        } else if (msg.type === 'stop') {
-          setRecordingStatus('stopped')
-          setIsRecording(false)
+  }, [taskName, taskSlug])
+
+  const generateSessionId = () => 'rec_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36)
+
+  // ---- BroadcastChannel listener ----
+  useEffect(() => {
+    if (!sessionId) return
+
+    const channel = new BroadcastChannel(CHANNEL_NAME)
+    channelRef.current = channel
+
+    channel.onmessage = (e) => {
+      const msg = e.data
+      if (msg.session !== sessionId) return
+
+      if (msg.type === 'connected') {
+        setRecorderConnected(true)
+        setRecorderUrl(msg.url || '')
+      } else if (msg.type === 'pong') {
+        setRecorderConnected(true)
+        setRecorderUrl(msg.url || '')
+      } else if (msg.type === 'step') {
+        const s = msg.step
+        const newStep: Step = {
+          id: s.id || Date.now().toString(),
+          selector: s.selector,
+          title: s.innerText?.slice(0, 40) || `Step`,
+          content: 'Click here to continue',
+          position: 'auto',
+          spotlight: true,
+          url: s.url,
         }
-      } catch (err) {
-        console.error('[SSE] Parse error:', err)
+        setSteps(prev => {
+          const updated = [...prev, { ...newStep, title: `Step ${prev.length + 1}` }]
+          setSelectedStep(newStep.id)
+          setMobileView('editor')
+          return updated
+        })
+      } else if (msg.type === 'stop') {
+        stopRecording()
       }
     }
-    
-    eventSource.onerror = () => {
-      console.log('[SSE] Connection error')
-    }
-    
+
+    // Ping to check if recorder is already connected
+    channel.postMessage({ type: 'ping', session: sessionId })
+
     return () => {
-      eventSource.close()
+      channel.close()
+      channelRef.current = null
     }
-  }, [sessionId, recordingStatus, steps.length])
+  }, [sessionId])
 
-  // 生成唯一 session ID
-  const generateSessionId = () => {
-    return 'rec_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36)
-  }
+  // ---- Start Snippet Mode ----
+  const startSnippetRecording = useCallback(() => {
+    const newSessionId = generateSessionId()
+    setSessionId(newSessionId)
+    setRecordingMode('snippet')
+    setRecorderConnected(false)
+    setShowSnippet(true)
+  }, [])
 
-  // 开始代理模式录制
+  // ---- Start Proxy Mode ----
   const startProxyRecording = useCallback(() => {
     if (!targetUrl) {
       alert('Please enter a target URL first')
       return
     }
-    
-    // 验证 URL
-    try {
-      new URL(targetUrl)
-    } catch {
+    try { new URL(targetUrl) } catch {
       alert('Please enter a valid URL (e.g., https://example.com)')
       return
     }
-    
+
     const newSessionId = generateSessionId()
     setSessionId(newSessionId)
-    setIsRecording(true)
-    setRecordingStatus('waiting')
-    
-    // 打开代理录制页面 - 使用新的 URL 格式
+    setRecordingMode('proxy')
+    setRecorderConnected(false)
+
     const protocol = targetUrl.startsWith('https') ? 'https' : 'http'
     const urlWithoutProtocol = targetUrl.replace(/^https?:\/\//, '')
     const proxyUrl = `/record/${newSessionId}/${protocol}/${urlWithoutProtocol}`
     window.open(proxyUrl, '_blank', 'width=1200,height=800')
   }, [targetUrl])
 
+  // ---- Stop Recording ----
+  const stopRecording = useCallback(() => {
+    if (channelRef.current && sessionId) {
+      channelRef.current.postMessage({ type: 'stop', session: sessionId })
+    }
+    setRecordingMode('idle')
+    setRecorderConnected(false)
+    setShowSnippet(false)
+    setSessionId(null)
+  }, [sessionId])
+
+  // ---- Snippet text ----
+  const snippetCode = sessionId
+    ? `<script src="${typeof window !== 'undefined' ? window.location.origin : ''}/recorder-snippet.js" data-session="${sessionId}"><\/script>`
+    : ''
+
+  const consoleSnippet = sessionId
+    ? `(function(){var s=document.createElement('script');s.src='${typeof window !== 'undefined' ? window.location.origin : ''}/recorder-snippet.js';s.dataset.session='${sessionId}';document.head.appendChild(s)})()`
+    : ''
+
+  const copySnippet = (text: string) => {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  // ---- Step operations ----
   const updateStep = (stepId: string, updates: Partial<Step>) => {
     setSteps(prev => prev.map(s => s.id === stepId ? { ...s, ...updates } : s))
   }
@@ -141,6 +161,7 @@ export default function NewTaskPage() {
     if (selectedStep === stepId) {
       const remaining = steps.filter(s => s.id !== stepId)
       setSelectedStep(remaining[0]?.id || null)
+      if (remaining.length === 0) setMobileView('config')
     }
   }
 
@@ -150,7 +171,6 @@ export default function NewTaskPage() {
       if (index === -1) return prev
       if (direction === 'up' && index === 0) return prev
       if (direction === 'down' && index === prev.length - 1) return prev
-      
       const newSteps = [...prev]
       const swapIndex = direction === 'up' ? index - 1 : index + 1
       ;[newSteps[index], newSteps[swapIndex]] = [newSteps[swapIndex], newSteps[index]]
@@ -165,10 +185,11 @@ export default function NewTaskPage() {
       title: `Step ${steps.length + 1}`,
       content: 'Description here',
       position: 'auto',
-      spotlight: true
+      spotlight: true,
     }
     setSteps(prev => [...prev, newStep])
     setSelectedStep(newStep.id)
+    setMobileView('editor')
   }
 
   const saveTask = async () => {
@@ -176,8 +197,7 @@ export default function NewTaskPage() {
       alert('Please fill in task name, slug, and add at least one step')
       return
     }
-    
-    // TODO: Save to Supabase via API
+
     const taskData = {
       name: taskName,
       slug: taskSlug,
@@ -187,246 +207,275 @@ export default function NewTaskPage() {
         title: s.title,
         content: s.content,
         position: s.position,
-        spotlight: s.spotlight
-      }))
+        spotlight: s.spotlight,
+      })),
     }
-    
-    console.log('Saving task:', taskData)
-    
+
     try {
-      const res = await fetch('/api/projects/1/tasks', {
+      const res = await fetch(`/api/projects/${projectId}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(taskData)
+        body: JSON.stringify(taskData),
       })
-      
       if (res.ok) {
-        alert('Task saved!')
-        window.location.href = '/dashboard/projects/1'
+        window.location.href = `/dashboard/projects/${projectId}`
       } else {
         const err = await res.json()
         alert('Error: ' + err.error)
       }
-    } catch (err) {
-      console.error(err)
+    } catch {
       alert('Failed to save task')
     }
   }
 
   const currentStep = steps.find(s => s.id === selectedStep)
+  const isRecording = recordingMode !== 'idle'
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
       <header className="bg-white border-b flex-shrink-0">
-        <div className="max-w-full mx-auto px-4 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard/projects/1" className="text-gray-500 hover:text-gray-700">
+        <div className="px-3 sm:px-4 py-2.5 sm:py-3 flex justify-between items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <button
+              onClick={() => mobileView === 'editor' ? setMobileView('config') : undefined}
+              className="sm:hidden text-gray-500 shrink-0"
+            >
+              {mobileView === 'editor' ? '←' : ''}
+            </button>
+            <Link href={`/dashboard/projects/${projectId}`} className="text-gray-500 hover:text-gray-700 hidden sm:inline shrink-0">
               ← Back
             </Link>
-            <span className="font-medium">New Task</span>
-            {recordingStatus === 'waiting' && (
-              <span className="text-sm text-yellow-600 flex items-center gap-1">
-                <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
-                Waiting for recorder...
-              </span>
-            )}
-            {recordingStatus === 'connected' && (
-              <span className="text-sm text-green-600 flex items-center gap-1">
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                Recording...
+            <span className="font-medium text-sm sm:text-base truncate">New Task</span>
+            {isRecording && (
+              <span className={`text-xs sm:text-sm flex items-center gap-1 shrink-0 ${recorderConnected ? 'text-green-600' : 'text-yellow-600'}`}>
+                <span className={`w-2 h-2 rounded-full animate-pulse ${recorderConnected ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                <span className="hidden sm:inline">{recorderConnected ? 'Recording...' : 'Waiting...'}</span>
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3">
-            <button 
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+            {isRecording && (
+              <button onClick={stopRecording} className="px-2.5 sm:px-4 py-1.5 sm:py-2 bg-red-500 text-white rounded-lg text-xs sm:text-sm">
+                ⏹ Stop
+              </button>
+            )}
+            <button
               onClick={saveTask}
               disabled={!taskName || steps.length === 0}
-              className="px-4 py-2 bg-black text-white rounded-lg text-sm hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-2.5 sm:px-4 py-1.5 sm:py-2 bg-black text-white rounded-lg text-xs sm:text-sm hover:bg-gray-800 disabled:opacity-50"
             >
-              Save Task
+              Save
             </button>
           </div>
         </div>
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Left panel - Task settings & Steps */}
-        <aside className="w-80 bg-white border-r flex flex-col">
+        {/* Left panel */}
+        <aside className={`
+          w-full sm:w-80 bg-white border-r flex flex-col shrink-0
+          ${mobileView === 'config' ? 'flex' : 'hidden sm:flex'}
+        `}>
           {/* Task settings */}
-          <div className="p-4 border-b space-y-4">
+          <div className="p-3 sm:p-4 border-b space-y-3">
+            <div className="flex items-center gap-2 sm:hidden">
+              <Link href={`/dashboard/projects/${projectId}`} className="text-gray-400 hover:text-gray-600 text-sm">←</Link>
+              <span className="font-medium text-sm">Task Settings</span>
+            </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Task Name</label>
-              <input
-                type="text"
-                value={taskName}
-                onChange={e => setTaskName(e.target.value)}
-                placeholder="Welcome Tour"
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-              />
+              <label className="block text-sm font-medium mb-1">Name</label>
+              <input type="text" value={taskName} onChange={e => setTaskName(e.target.value)}
+                placeholder="Welcome Tour" className="w-full border rounded-lg px-3 py-2 text-sm" />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Slug</label>
-              <input
-                type="text"
-                value={taskSlug}
-                onChange={e => setTaskSlug(e.target.value)}
-                placeholder="welcome-tour"
-                className="w-full border rounded-lg px-3 py-2 text-sm font-mono"
-              />
+              <input type="text" value={taskSlug} onChange={e => setTaskSlug(e.target.value)}
+                placeholder="welcome-tour" className="w-full border rounded-lg px-3 py-2 text-sm font-mono" />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Trigger</label>
-              <select
-                value={trigger}
-                onChange={e => setTrigger(e.target.value as typeof trigger)}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="manual">Manual (API call)</option>
-                <option value="auto">Auto (every page load)</option>
-                <option value="first-visit">First Visit Only</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Target URL</label>
-              <input
-                type="url"
-                value={targetUrl}
-                onChange={e => setTargetUrl(e.target.value)}
-                placeholder="https://your-app.com"
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Trigger</label>
+                <select value={trigger} onChange={e => setTrigger(e.target.value as typeof trigger)}
+                  className="w-full border rounded-lg px-3 py-2 text-sm">
+                  <option value="manual">Manual</option>
+                  <option value="auto">Auto</option>
+                  <option value="first-visit">First Visit</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">URL</label>
+                <input type="url" value={targetUrl} onChange={e => setTargetUrl(e.target.value)}
+                  placeholder="https://..." className="w-full border rounded-lg px-3 py-2 text-sm" />
+              </div>
             </div>
           </div>
 
           {/* Recording controls */}
-          <div className="p-4 border-b space-y-2">
+          <div className="p-3 sm:p-4 border-b space-y-2">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Record Steps</p>
+
+            {/* Snippet mode button */}
+            <button
+              onClick={startSnippetRecording}
+              disabled={isRecording}
+              className={`w-full py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 ${
+                isRecording ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+            >
+              📋 Copy Snippet to Your Page
+            </button>
+
+            {/* Proxy mode button */}
             <button
               onClick={startProxyRecording}
               disabled={isRecording || !targetUrl}
-              className={`w-full py-2 rounded-lg text-sm font-medium ${
-                isRecording
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              className={`w-full py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 ${
+                isRecording || !targetUrl ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'border border-blue-600 text-blue-600 hover:bg-blue-50'
               }`}
             >
-              {isRecording ? '⏺ Recording in progress...' : '⏺ Start Recording (Proxy Mode)'}
+              🌐 Proxy Mode
             </button>
-            <button
-              onClick={addManualStep}
-              className="w-full py-2 rounded-lg text-sm font-medium border hover:bg-gray-50"
-            >
+
+            {/* Manual add */}
+            <button onClick={addManualStep}
+              className="w-full py-2 rounded-lg text-sm font-medium border hover:bg-gray-50">
               + Add Step Manually
             </button>
-            <p className="text-xs text-gray-500">
-              Proxy mode opens your site in a new window with recording enabled
-            </p>
           </div>
 
-          {/* Steps list */}
-          <div className="flex-1 overflow-auto">
-            <div className="p-2">
-              {steps.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm">
-                  No steps yet. Start recording or add manually.
+          {/* Snippet modal */}
+          {showSnippet && (
+            <div className="p-3 sm:p-4 border-b bg-green-50 space-y-3">
+              <div className="flex justify-between items-center">
+                <p className="text-sm font-medium text-green-800">📋 Install Recorder</p>
+                <button onClick={() => setShowSnippet(false)} className="text-green-600 text-xs">✕</button>
+              </div>
+
+              <div>
+                <p className="text-xs text-green-700 mb-1 font-medium">Option 1: Paste in Console</p>
+                <div className="relative">
+                  <pre className="bg-green-900 text-green-300 p-2.5 rounded text-xs overflow-x-auto max-h-20">{consoleSnippet}</pre>
+                  <button onClick={() => copySnippet(consoleSnippet)}
+                    className="absolute top-1 right-1 px-2 py-0.5 bg-green-700 text-white text-xs rounded hover:bg-green-600">
+                    {copied ? '✓' : 'Copy'}
+                  </button>
                 </div>
-              ) : (
-                steps.map((step, index) => (
-                  <div
-                    key={step.id}
-                    onClick={() => setSelectedStep(step.id)}
-                    className={`p-3 rounded-lg cursor-pointer mb-2 ${
-                      selectedStep === step.id
-                        ? 'bg-blue-50 border border-blue-200'
-                        : 'hover:bg-gray-50 border border-transparent'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="w-5 h-5 bg-gray-200 rounded-full text-xs flex items-center justify-center flex-shrink-0">
-                        {index + 1}
-                      </span>
-                      <span className="font-medium text-sm truncate flex-1">{step.title}</span>
-                      <div className="flex gap-1">
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); moveStep(step.id, 'up') }}
-                          className="text-gray-400 hover:text-gray-600 text-xs"
-                          disabled={index === 0}
-                        >↑</button>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); moveStep(step.id, 'down') }}
-                          className="text-gray-400 hover:text-gray-600 text-xs"
-                          disabled={index === steps.length - 1}
-                        >↓</button>
-                      </div>
-                    </div>
-                    <div className="text-xs text-gray-500 truncate pl-7">{step.selector || 'No selector'}</div>
-                  </div>
-                ))
-              )}
+              </div>
+
+              <div>
+                <p className="text-xs text-green-700 mb-1 font-medium">Option 2: Add to HTML</p>
+                <div className="relative">
+                  <pre className="bg-green-900 text-green-300 p-2.5 rounded text-xs overflow-x-auto max-h-20">{snippetCode}</pre>
+                  <button onClick={() => copySnippet(snippetCode)}
+                    className="absolute top-1 right-1 px-2 py-0.5 bg-green-700 text-white text-xs rounded hover:bg-green-600">
+                    {copied ? '✓' : 'Copy'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs">
+                {recorderConnected ? (
+                  <span className="text-green-700 flex items-center gap-1">
+                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                    Connected — recording from {recorderUrl}
+                  </span>
+                ) : (
+                  <span className="text-yellow-700 flex items-center gap-1">
+                    <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+                    Waiting for connection...
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs text-green-600">
+                The page will show a green glowing border when recording is active. Click elements to capture steps.
+              </p>
             </div>
+          )}
+
+          {/* Steps list */}
+          <div className="flex-1 overflow-auto p-2">
+            <div className="flex justify-between items-center px-1 mb-2">
+              <span className="text-xs font-medium text-gray-500">Steps ({steps.length})</span>
+            </div>
+            {steps.length === 0 ? (
+              <div className="text-center py-6 text-gray-400 text-sm">
+                No steps yet
+              </div>
+            ) : (
+              steps.map((step, index) => (
+                <div
+                  key={step.id}
+                  onClick={() => { setSelectedStep(step.id); setMobileView('editor') }}
+                  className={`p-3 rounded-lg cursor-pointer mb-1.5 active:bg-blue-50 ${
+                    selectedStep === step.id
+                      ? 'bg-blue-50 border border-blue-200'
+                      : 'hover:bg-gray-50 border border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="w-5 h-5 bg-gray-200 rounded-full text-xs flex items-center justify-center shrink-0">
+                      {index + 1}
+                    </span>
+                    <span className="font-medium text-sm truncate flex-1">{step.title}</span>
+                    <div className="flex gap-1">
+                      <button onClick={(e) => { e.stopPropagation(); moveStep(step.id, 'up') }}
+                        className="text-gray-400 hover:text-gray-600 text-xs" disabled={index === 0}>↑</button>
+                      <button onClick={(e) => { e.stopPropagation(); moveStep(step.id, 'down') }}
+                        className="text-gray-400 hover:text-gray-600 text-xs" disabled={index === steps.length - 1}>↓</button>
+                      <span className="sm:hidden ml-1 text-gray-300">›</span>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500 truncate pl-7">{step.selector || 'No selector'}</div>
+                </div>
+              ))
+            )}
           </div>
         </aside>
 
-        {/* Main area - Step editor */}
-        <main className="flex-1 flex">
+        {/* Right panel - Step editor */}
+        <main className={`
+          flex-1 min-w-0 overflow-auto
+          ${mobileView === 'editor' ? 'block' : 'hidden sm:block'}
+        `}>
           {currentStep ? (
-            <div className="flex-1 p-6 overflow-auto">
-              <div className="max-w-2xl">
-                <div className="bg-white rounded-lg border p-6">
-                  <div className="flex justify-between items-start mb-6">
-                    <h2 className="text-lg font-bold">Edit Step {steps.findIndex(s => s.id === currentStep.id) + 1}</h2>
-                    <button
-                      onClick={() => deleteStep(currentStep.id)}
-                      className="text-red-500 hover:text-red-600 text-sm"
-                    >
-                      Delete
-                    </button>
+            <div className="p-4 sm:p-6">
+              <div className="max-w-2xl mx-auto sm:mx-0">
+                <div className="bg-white rounded-lg border p-4 sm:p-6">
+                  <div className="flex justify-between items-start mb-4 sm:mb-6">
+                    <h2 className="text-base sm:text-lg font-bold">
+                      Edit Step {steps.findIndex(s => s.id === currentStep.id) + 1}
+                    </h2>
+                    <button onClick={() => deleteStep(currentStep.id)}
+                      className="text-red-500 hover:text-red-600 text-sm">Delete</button>
                   </div>
-
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium mb-1">CSS Selector</label>
-                      <input
-                        type="text"
-                        value={currentStep.selector}
+                      <input type="text" value={currentStep.selector}
                         onChange={e => updateStep(currentStep.id, { selector: e.target.value })}
-                        className="w-full border rounded-lg px-3 py-2 text-sm font-mono"
-                        placeholder="#element-id or .class-name"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        The CSS selector for the element to highlight
-                      </p>
+                        className="w-full border rounded-lg px-3 py-2 text-sm font-mono min-w-0"
+                        placeholder="#element-id" />
                     </div>
-
                     <div>
                       <label className="block text-sm font-medium mb-1">Title</label>
-                      <input
-                        type="text"
-                        value={currentStep.title}
+                      <input type="text" value={currentStep.title}
                         onChange={e => updateStep(currentStep.id, { title: e.target.value })}
-                        className="w-full border rounded-lg px-3 py-2"
-                        placeholder="Step title"
-                      />
+                        className="w-full border rounded-lg px-3 py-2 text-sm sm:text-base" />
                     </div>
-
                     <div>
                       <label className="block text-sm font-medium mb-1">Description</label>
-                      <textarea
-                        value={currentStep.content}
+                      <textarea value={currentStep.content}
                         onChange={e => updateStep(currentStep.id, { content: e.target.value })}
-                        className="w-full border rounded-lg px-3 py-2 h-24 resize-none"
-                        placeholder="Explain what this step is about..."
-                      />
+                        className="w-full border rounded-lg px-3 py-2 h-20 sm:h-24 resize-none text-sm sm:text-base" />
                     </div>
-
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm font-medium mb-1">Popover Position</label>
-                        <select
-                          value={currentStep.position}
+                        <label className="block text-sm font-medium mb-1">Position</label>
+                        <select value={currentStep.position}
                           onChange={e => updateStep(currentStep.id, { position: e.target.value as Step['position'] })}
-                          className="w-full border rounded-lg px-3 py-2"
-                        >
+                          className="w-full border rounded-lg px-3 py-2 text-sm">
                           <option value="auto">Auto</option>
                           <option value="top">Top</option>
                           <option value="bottom">Bottom</option>
@@ -434,16 +483,12 @@ export default function NewTaskPage() {
                           <option value="right">Right</option>
                         </select>
                       </div>
-
-                      <div className="flex items-end">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={currentStep.spotlight}
+                      <div className="flex items-end pb-1">
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="checkbox" checked={currentStep.spotlight}
                             onChange={e => updateStep(currentStep.id, { spotlight: e.target.checked })}
-                            className="rounded"
-                          />
-                          <span className="text-sm">Spotlight effect</span>
+                            className="rounded" />
+                          Spotlight
                         </label>
                       </div>
                     </div>
@@ -451,20 +496,15 @@ export default function NewTaskPage() {
                 </div>
 
                 {/* Preview */}
-                <div className="mt-6 bg-white rounded-lg border p-6">
-                  <h3 className="font-medium mb-4">Preview</h3>
-                  <div className="bg-gray-100 rounded-lg p-8 flex items-center justify-center min-h-[200px]">
-                    <div className="bg-white rounded-lg shadow-xl p-4 max-w-xs border">
-                      <h4 className="font-bold mb-2">{currentStep.title || 'Step Title'}</h4>
-                      <p className="text-sm text-gray-600 mb-4">{currentStep.content || 'Step description...'}</p>
-                      <div className="flex justify-between items-center">
-                        <button className="text-sm text-gray-500 hover:text-gray-700">Skip</button>
-                        <div className="flex gap-2">
-                          <button className="text-sm text-gray-500 hover:text-gray-700">Back</button>
-                          <button className="text-sm bg-black text-white px-4 py-1.5 rounded hover:bg-gray-800">
-                            Next
-                          </button>
-                        </div>
+                <div className="mt-4 sm:mt-6 bg-white rounded-lg border p-4 sm:p-6">
+                  <h3 className="font-medium mb-3 text-sm sm:text-base">Preview</h3>
+                  <div className="bg-gray-100 rounded-lg p-4 sm:p-8 flex items-center justify-center">
+                    <div className="bg-white rounded-lg shadow-xl p-4 max-w-xs w-full border text-left">
+                      <h4 className="font-bold mb-2 text-sm sm:text-base">{currentStep.title || 'Step Title'}</h4>
+                      <p className="text-xs sm:text-sm text-gray-600 mb-3">{currentStep.content || 'Description...'}</p>
+                      <div className="flex justify-between">
+                        <button className="text-xs sm:text-sm text-gray-500">Skip</button>
+                        <button className="text-xs sm:text-sm bg-black text-white px-3 py-1 rounded">Next</button>
                       </div>
                     </div>
                   </div>
@@ -472,23 +512,20 @@ export default function NewTaskPage() {
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-500">
+            <div className="flex items-center justify-center h-full text-gray-500 p-4">
               <div className="text-center">
-                <div className="text-6xl mb-4">🎯</div>
-                <h3 className="text-xl font-medium mb-2">No steps yet</h3>
-                <p className="text-sm mb-4">Start recording or add steps manually</p>
-                <div className="flex gap-3 justify-center">
-                  <button
-                    onClick={startProxyRecording}
-                    disabled={!targetUrl}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    ⏺ Start Recording
+                <div className="text-5xl sm:text-6xl mb-4">🎯</div>
+                <h3 className="text-lg sm:text-xl font-medium mb-2">Ready to Record</h3>
+                <p className="text-sm mb-4 max-w-xs mx-auto">
+                  Use the Snippet mode to record on your own site, or Proxy mode for external sites.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                  <button onClick={startSnippetRecording} disabled={isRecording}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50">
+                    📋 Snippet Mode
                   </button>
-                  <button
-                    onClick={addManualStep}
-                    className="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50"
-                  >
+                  <button onClick={addManualStep}
+                    className="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">
                     + Add Manually
                   </button>
                 </div>
