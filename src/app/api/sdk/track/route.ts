@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
 interface TrackPayload {
   task_id: string
@@ -8,29 +9,38 @@ interface TrackPayload {
   completed: boolean
 }
 
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!
+
 export async function POST(request: NextRequest) {
   try {
     const body: TrackPayload = await request.json()
     
-    // TODO: Save to Supabase
-    // const supabase = createClient()
-    // await supabase.from('task_completions').insert({
-    //   task_id: body.task_id,
-    //   visitor_id: body.visitor_id,
-    //   steps_completed: body.steps_completed,
-    //   total_steps: body.total_steps,
-    //   completed: body.completed
-    // })
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
     
-    console.log('[Track]', body)
+    const { error } = await supabase.from('task_completions').insert({
+      task_id: body.task_id,
+      visitor_id: body.visitor_id,
+      steps_completed: body.steps_completed,
+      total_steps: body.total_steps,
+      completed: body.completed
+    })
+    
+    if (error) {
+      console.error('[Track Error]', error)
+      // Still return success - analytics shouldn't block UX
+    }
     
     return NextResponse.json({ success: true }, {
       headers: {
         'Access-Control-Allow-Origin': '*'
       }
     })
-  } catch (error) {
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+  } catch {
+    return NextResponse.json({ error: 'Invalid request' }, { 
+      status: 400,
+      headers: { 'Access-Control-Allow-Origin': '*' }
+    })
   }
 }
 
