@@ -125,8 +125,10 @@ export default function NewTaskPage() {
     setIsRecording(true)
     setRecordingStatus('waiting')
     
-    // 打开代理录制页面
-    const proxyUrl = `/record/${newSessionId}/${targetUrl}`
+    // 打开代理录制页面 - 使用新的 URL 格式
+    const protocol = targetUrl.startsWith('https') ? 'https' : 'http'
+    const urlWithoutProtocol = targetUrl.replace(/^https?:\/\//, '')
+    const proxyUrl = `/record/${newSessionId}/${protocol}/${urlWithoutProtocol}`
     window.open(proxyUrl, '_blank', 'width=1200,height=800')
   }, [targetUrl])
 
