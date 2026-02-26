@@ -1,63 +1,67 @@
 import { NextRequest } from 'next/server'
 
-/**
- * WebSocket 录制器实时通信
- * 
- * 由于 Next.js App Router 不原生支持 WebSocket，
- * 这里用 Server-Sent Events (SSE) 作为替代方案
- * 
- * 实际生产中可以用:
- * 1. 独立的 WebSocket 服务器 (推荐)
- * 2. Vercel 的 Edge Runtime + Durable Objects
- * 3. 第三方服务如 Pusher/Ably
- */
-
 // 内存存储活跃的录制会话 (生产环境用 Redis)
 const sessions = new Map<string, {
   steps: StepData[]
   clients: Set<ReadableStreamDefaultController>
   createdAt: number
+  connectedUrl?: string
 }>()
 
 interface StepData {
+  id: string
+  index: number
   selector: string
   tagName: string
   innerText?: string
   rect: { x: number; y: number; width: number; height: number }
+  url: string
   timestamp: number
 }
 
-// SSE 长连接 - Dashboard 端监听
-export async function GET(request: NextRequest) {
-  const sessionId = request.nextUrl.searchParams.get('session')
-  
-  if (!sessionId) {
-    return new Response('Missing session', { status: 400 })
-  }
-
-  // 初始化 session
+function getSession(sessionId: string) {
   if (!sessions.has(sessionId)) {
     sessions.set(sessionId, {
       steps: [],
       clients: new Set(),
-      createdAt: Date.now()
+      createdAt: Date.now(),
     })
   }
+  return sessions.get(sessionId)!
+}
 
-  const session = sessions.get(sessionId)!
+function broadcast(session: ReturnType<typeof getSession>, message: string) {
+  for (const client of session.clients) {
+    try {
+      client.enqueue(`data: ${message}\n\n`)
+    } catch {
+      session.clients.delete(client)
+    }
+  }
+}
+
+// ---- SSE: Dashboard listens ----
+export async function GET(request: NextRequest) {
+  const sessionId = request.nextUrl.searchParams.get('session')
+  if (!sessionId) {
+    return new Response('Missing session', { status: 400 })
+  }
+
+  const session = getSession(sessionId)
 
   const stream = new ReadableStream({
     start(controller) {
-      // 注册客户端
       session.clients.add(controller)
-      
-      // 发送已有的步骤
-      if (session.steps.length > 0) {
-        const data = JSON.stringify({ type: 'sync', steps: session.steps })
-        controller.enqueue(`data: ${data}\n\n`)
+
+      // Send existing state
+      if (session.connectedUrl) {
+        controller.enqueue(`data: ${JSON.stringify({ type: 'connected', url: session.connectedUrl })}\n\n`)
       }
-      
-      // 心跳保持连接
+      if (session.steps.length > 0) {
+        controller.enqueue(`data: ${JSON.stringify({ type: 'sync', steps: session.steps })}\n\n`)
+      }
+
+      // Heartbeat
       const heartbeat = setInterval(() => {
         try {
           controller.enqueue(': heartbeat\n\n')
@@ -65,23 +69,19 @@ export async function GET(request: NextRequest) {
           clearInterval(heartbeat)
         }
       }, 30000)
-      
-      // 清理
+
       request.signal.addEventListener('abort', () => {
         clearInterval(heartbeat)
         session.clients.delete(controller)
-        
-        // 如果没有客户端了，30分钟后清理 session
+        // Cleanup after 30 min with no clients
         if (session.clients.size === 0) {
           setTimeout(() => {
             const s = sessions.get(sessionId)
-            if (s && s.clients.size === 0) {
-              sessions.delete(sessionId)
-            }
+            if (s && s.clients.size === 0) sessions.delete(sessionId)
           }, 30 * 60 * 1000)
         }
       })
-    }
+    },
   })
 
   return new Response(stream, {
@@ -89,82 +89,52 @@ export async function GET(request: NextRequest) {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-    }
+      'Access-Control-Allow-Origin': '*',
+    },
   })
 }
 
-// 接收录制器发送的步骤
+// ---- POST: Recorder reports events ----
 export async function POST(request: NextRequest) {
   const sessionId = request.nextUrl.searchParams.get('session')
-  
   if (!sessionId) {
-    return Response.json({ error: 'Missing session' }, { status: 400 })
+    return Response.json({ error: 'Missing session' }, {
+      status: 400,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+    })
   }
 
   const body = await request.json()
-  const { type, data } = body
+  const { type } = body
+  const session = getSession(sessionId)
 
-  // 初始化 session
-  if (!sessions.has(sessionId)) {
-    sessions.set(sessionId, {
-      steps: [],
-      clients: new Set(),
-      createdAt: Date.now()
-    })
-  }
-
-  const session = sessions.get(sessionId)!
-
-  if (type === 'step') {
-    session.steps.push(data)
-    
-    // 广播给所有监听的客户端
-    const message = JSON.stringify({ type: 'step', data })
-    for (const client of session.clients) {
-      try {
-        client.enqueue(`data: ${message}\n\n`)
-      } catch {
-        session.clients.delete(client)
-      }
-    }
-  } else if (type === 'init') {
-    // 录制器初始化
-    const message = JSON.stringify({ type: 'init', data })
-    for (const client of session.clients) {
-      try {
-        client.enqueue(`data: ${message}\n\n`)
-      } catch {
-        session.clients.delete(client)
-      }
-    }
+  if (type === 'connected') {
+    session.connectedUrl = body.url || ''
+    broadcast(session, JSON.stringify({ type: 'connected', url: body.url, title: body.title }))
+  } else if (type === 'step') {
+    const step = body.step as StepData
+    session.steps.push(step)
+    broadcast(session, JSON.stringify({ type: 'step', step }))
   } else if (type === 'stop') {
-    // 录制结束
-    const message = JSON.stringify({ type: 'stop', steps: session.steps })
-    for (const client of session.clients) {
-      try {
-        client.enqueue(`data: ${message}\n\n`)
-      } catch {
-        session.clients.delete(client)
-      }
-    }
+    broadcast(session, JSON.stringify({ type: 'stop', steps: session.steps }))
+  } else if (type === 'pong') {
+    session.connectedUrl = body.url || session.connectedUrl
+    broadcast(session, JSON.stringify({ type: 'connected', url: body.url }))
   }
 
-  return Response.json({ success: true, stepCount: session.steps.length })
+  return Response.json(
+    { success: true, stepCount: session.steps.length },
+    { headers: { 'Access-Control-Allow-Origin': '*' } }
+  )
 }
 
-// 获取 session 状态
-export async function OPTIONS(request: NextRequest) {
-  const sessionId = request.nextUrl.searchParams.get('session')
-  
-  if (sessionId && sessions.has(sessionId)) {
-    const session = sessions.get(sessionId)!
-    return Response.json({
-      exists: true,
-      stepCount: session.steps.length,
-      clientCount: session.clients.size,
-      createdAt: session.createdAt
-    })
-  }
-  
-  return Response.json({ exists: false })
+// ---- CORS preflight ----
+export async function OPTIONS() {
+  return new Response(null, {
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    },
+  })
 }

@@ -47,32 +47,30 @@ export default function NewTaskPage() {
   const generateSessionId = () => 'rec_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36)
 
   // ---- BroadcastChannel listener ----
+  // ---- BroadcastChannel + SSE listener ----
   useEffect(() => {
     if (!sessionId) return
 
-    const channel = new BroadcastChannel(CHANNEL_NAME)
-    channelRef.current = channel
-
-    channel.onmessage = (e) => {
-      const msg = e.data
-      if (msg.session !== sessionId) return
+    // Helper to handle incoming messages from either channel
+    const handleMessage = (msg: Record<string, unknown>) => {
+      if (msg.session && msg.session !== sessionId) return
 
       if (msg.type === 'connected') {
         setRecorderConnected(true)
-        setRecorderUrl(msg.url || '')
+        setRecorderUrl((msg.url as string) || '')
       } else if (msg.type === 'pong') {
         setRecorderConnected(true)
-        setRecorderUrl(msg.url || '')
+        setRecorderUrl((msg.url as string) || '')
       } else if (msg.type === 'step') {
-        const s = msg.step
+        const s = msg.step as Record<string, unknown>
         const newStep: Step = {
-          id: s.id || Date.now().toString(),
-          selector: s.selector,
-          title: s.innerText?.slice(0, 40) || `Step`,
+          id: (s.id as string) || Date.now().toString(),
+          selector: s.selector as string,
+          title: ((s.innerText as string) || '').slice(0, 40) || 'Step',
           content: 'Click here to continue',
           position: 'auto',
           spotlight: true,
-          url: s.url,
+          url: s.url as string,
         }
         setSteps(prev => {
           const updated = [...prev, { ...newStep, title: `Step ${prev.length + 1}` }]
@@ -85,12 +83,29 @@ export default function NewTaskPage() {
       }
     }
 
-    // Ping to check if recorder is already connected
-    channel.postMessage({ type: 'ping', session: sessionId })
+    // 1. BroadcastChannel (same-origin bonus)
+    let channel: BroadcastChannel | null = null
+    try {
+      channel = new BroadcastChannel(CHANNEL_NAME)
+      channelRef.current = channel
+      channel.onmessage = (e) => handleMessage(e.data)
+      channel.postMessage({ type: 'ping', session: sessionId })
+    } catch {
+      // BroadcastChannel not supported
+    }
+
+    // 2. SSE (cross-origin primary)
+    const eventSource = new EventSource(`/api/recorder/ws?session=${sessionId}`)
+    eventSource.onmessage = (event) => {
+      try {
+        handleMessage(JSON.parse(event.data))
+      } catch {}
+    }
 
     return () => {
-      channel.close()
+      if (channel) channel.close()
       channelRef.current = null
+      eventSource.close()
     }
   }, [sessionId])
 
@@ -137,12 +152,14 @@ export default function NewTaskPage() {
   }, [sessionId])
 
   // ---- Snippet text ----
+  const serverOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+
   const snippetCode = sessionId
-    ? `<script src="${typeof window !== 'undefined' ? window.location.origin : ''}/recorder-snippet.js" data-session="${sessionId}"><\/script>`
+    ? `<script src="${serverOrigin}/recorder-snippet.js" data-session="${sessionId}" data-server="${serverOrigin}"><\/script>`
     : ''
 
   const consoleSnippet = sessionId
-    ? `(function(){var s=document.createElement('script');s.src='${typeof window !== 'undefined' ? window.location.origin : ''}/recorder-snippet.js';s.dataset.session='${sessionId}';document.head.appendChild(s)})()`
+    ? `(function(){var s=document.createElement('script');s.src='${serverOrigin}/recorder-snippet.js';s.dataset.session='${sessionId}';s.dataset.server='${serverOrigin}';document.head.appendChild(s)})()`
     : ''
 
   const copySnippet = (text: string) => {

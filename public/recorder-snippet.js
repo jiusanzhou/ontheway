@@ -1,135 +1,100 @@
 /**
  * OnTheWay Recorder Script (Snippet Mode)
  * 
- * Usage: User copies a <script> tag into their page's console or HTML.
- * Communicates with Dashboard via BroadcastChannel.
+ * Communication: HTTP POST to OnTheWay server + BroadcastChannel (same-origin fallback)
  * 
- * Features:
- * - Green glow border on activation
- * - Hover highlight on elements  
- * - Click to capture step (CSS selector + metadata)
- * - BroadcastChannel for tab-to-tab communication
- * - Survives page navigation via sessionStorage
- * - Visual feedback for all states
+ * Install via console:
+ *   (function(){var s=document.createElement('script');s.src='https://ontheway.zoe.im/recorder-snippet.js';s.dataset.session='SESSION_ID';s.dataset.server='https://ontheway.zoe.im';document.head.appendChild(s)})()
  */
 
 (function() {
   'use strict';
 
-  // ---- Config ----
-  const CHANNEL_NAME = 'otw-recorder';
-  const SESSION_KEY = 'otw_recorder_session';
-  const GLOW_COLOR = '#22c55e';
+  var GLOW_COLOR = '#22c55e';
+  var SESSION_KEY = 'otw_recorder_session';
+  var SERVER_KEY = 'otw_recorder_server';
+  var CHANNEL_NAME = 'otw-recorder';
 
-  // Get session from script attribute or sessionStorage
-  const scriptEl = document.currentScript;
-  let sessionId = scriptEl?.getAttribute('data-session') || sessionStorage.getItem(SESSION_KEY);
+  // ---- Config from script tag or sessionStorage ----
+  var scriptEl = document.currentScript;
+  var sessionId = (scriptEl && scriptEl.getAttribute('data-session')) || sessionStorage.getItem(SESSION_KEY);
+  var serverUrl = (scriptEl && scriptEl.getAttribute('data-server')) || sessionStorage.getItem(SERVER_KEY) || '';
 
   if (!sessionId) {
-    console.warn('[OnTheWay] No session ID. Use data-session attribute.');
+    console.warn('[OnTheWay] No session ID.');
     return;
   }
 
-  // Persist session for navigation
+  // Persist for navigation
   sessionStorage.setItem(SESSION_KEY, sessionId);
+  if (serverUrl) sessionStorage.setItem(SERVER_KEY, serverUrl);
 
-  // ---- BroadcastChannel ----
-  const channel = new BroadcastChannel(CHANNEL_NAME);
-  let stepIndex = 0;
+  var stepIndex = parseInt(sessionStorage.getItem('otw_step_index') || '0', 10);
+
+  // ---- Communication: HTTP POST (primary) + BroadcastChannel (bonus) ----
+  var channel = null;
+  try { channel = new BroadcastChannel(CHANNEL_NAME); } catch(e) {}
 
   function send(type, data) {
-    channel.postMessage({ type, session: sessionId, ...data });
+    var payload = Object.assign({ type: type, session: sessionId }, data);
+
+    // BroadcastChannel (same-origin)
+    if (channel) {
+      try { channel.postMessage(payload); } catch(e) {}
+    }
+
+    // HTTP POST (cross-origin, primary)
+    var url = (serverUrl || '') + '/api/recorder/ws?session=' + encodeURIComponent(sessionId);
+    try {
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        mode: 'cors',
+      }).catch(function() {});
+    } catch(e) {}
   }
 
-  // Listen for commands from Dashboard
-  channel.onmessage = function(e) {
-    const msg = e.data;
-    if (msg.session !== sessionId) return;
+  // Listen for stop command from BroadcastChannel
+  if (channel) {
+    channel.onmessage = function(e) {
+      var msg = e.data;
+      if (msg.session !== sessionId) return;
+      if (msg.type === 'ping') send('pong', { url: location.href });
+      if (msg.type === 'stop') cleanup();
+    };
+  }
 
-    if (msg.type === 'ping') {
-      send('pong', { url: location.href });
-    } else if (msg.type === 'stop') {
-      cleanup();
-    }
-  };
-
-  // ---- Glow Border (activation indicator) ----
-  const glowEl = document.createElement('div');
+  // ---- Glow Border ----
+  var glowEl = document.createElement('div');
   glowEl.id = 'otw-glow-border';
-  glowEl.innerHTML = `
-    <style>
-      #otw-glow-border {
-        position: fixed;
-        inset: 0;
-        pointer-events: none;
-        z-index: 2147483647;
-        border: 3px solid ${GLOW_COLOR};
-        box-shadow: inset 0 0 20px ${GLOW_COLOR}44, 0 0 20px ${GLOW_COLOR}44;
-        animation: otw-glow-pulse 2s ease-in-out 3;
-      }
-      @keyframes otw-glow-pulse {
-        0%, 100% { opacity: 0.4; }
-        50% { opacity: 1; }
-      }
-      #otw-glow-border.otw-glow-steady {
-        animation: none;
-        opacity: 0.3;
-        border-width: 2px;
-      }
-      #otw-recorder-badge {
-        position: fixed;
-        top: 8px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: ${GLOW_COLOR};
-        color: white;
-        font: bold 12px/1 system-ui, sans-serif;
-        padding: 6px 16px;
-        border-radius: 100px;
-        z-index: 2147483647;
-        pointer-events: auto;
-        cursor: pointer;
-        box-shadow: 0 2px 12px ${GLOW_COLOR}66;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        user-select: none;
-      }
-      #otw-recorder-badge .otw-dot {
-        width: 8px;
-        height: 8px;
-        background: white;
-        border-radius: 50%;
-        animation: otw-dot-blink 1s ease-in-out infinite;
-      }
-      @keyframes otw-dot-blink {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.3; }
-      }
-      #otw-hover-highlight {
-        position: fixed;
-        pointer-events: none;
-        z-index: 2147483646;
-        border: 2px solid #3b82f6;
-        background: #3b82f644;
-        border-radius: 4px;
-        transition: all 0.1s ease;
-        display: none;
-      }
-    </style>
-  `;
+  var style = document.createElement('style');
+  style.textContent = [
+    '#otw-glow-border{position:fixed;inset:0;pointer-events:none;z-index:2147483647;',
+    'border:3px solid ' + GLOW_COLOR + ';',
+    'box-shadow:inset 0 0 20px ' + GLOW_COLOR + '44,0 0 20px ' + GLOW_COLOR + '44;',
+    'animation:otw-glow 2s ease-in-out 3}',
+    '#otw-glow-border.otw-steady{animation:none;opacity:0.3;border-width:2px}',
+    '@keyframes otw-glow{0%,100%{opacity:0.4}50%{opacity:1}}',
+    '#otw-badge{position:fixed;top:8px;left:50%;transform:translateX(-50%);',
+    'background:' + GLOW_COLOR + ';color:#fff;font:bold 12px/1 system-ui,sans-serif;',
+    'padding:6px 16px;border-radius:100px;z-index:2147483647;pointer-events:auto;',
+    'cursor:pointer;box-shadow:0 2px 12px ' + GLOW_COLOR + '66;display:flex;align-items:center;gap:6px;user-select:none}',
+    '#otw-badge .dot{width:8px;height:8px;background:#fff;border-radius:50%;animation:otw-blink 1s ease-in-out infinite}',
+    '@keyframes otw-blink{0%,100%{opacity:1}50%{opacity:0.3}}',
+    '#otw-highlight{position:fixed;pointer-events:none;z-index:2147483646;',
+    'border:2px solid #3b82f6;background:#3b82f644;border-radius:4px;',
+    'transition:all .1s ease;display:none}',
+  ].join('\n');
+  document.documentElement.appendChild(style);
   document.documentElement.appendChild(glowEl);
+  setTimeout(function() { glowEl.classList.add('otw-steady'); }, 6000);
 
-  // After 3 pulses, switch to steady subtle border
-  setTimeout(function() {
-    glowEl.classList.add('otw-glow-steady');
-  }, 6000);
-
-  // ---- Recording Badge ----
-  const badge = document.createElement('div');
-  badge.id = 'otw-recorder-badge';
-  badge.innerHTML = '<span class="otw-dot"></span> Recording';
-  badge.title = 'OnTheWay Recorder — Click to stop';
+  // ---- Badge ----
+  var badge = document.createElement('div');
+  badge.id = 'otw-badge';
+  badge.innerHTML = '<span class="dot"></span> Recording';
+  badge.title = 'Click to stop recording';
   badge.onclick = function() {
     if (confirm('Stop recording?')) {
       send('stop', {});
@@ -139,171 +104,128 @@
   document.documentElement.appendChild(badge);
 
   // ---- Hover Highlight ----
-  const highlight = document.createElement('div');
-  highlight.id = 'otw-hover-highlight';
+  var highlight = document.createElement('div');
+  highlight.id = 'otw-highlight';
   document.documentElement.appendChild(highlight);
 
-  let hoveredEl = null;
+  var hoveredEl = null;
 
-  function onMouseMove(e) {
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    if (!el || el === hoveredEl || isRecorderUI(el)) return;
-    hoveredEl = el;
-
-    const rect = el.getBoundingClientRect();
-    highlight.style.display = 'block';
-    highlight.style.top = rect.top + 'px';
-    highlight.style.left = rect.left + 'px';
-    highlight.style.width = rect.width + 'px';
-    highlight.style.height = rect.height + 'px';
+  function isOurs(el) {
+    return el && (el.id === 'otw-glow-border' || el.id === 'otw-badge' || el.id === 'otw-highlight' ||
+      (el.closest && el.closest('#otw-glow-border,#otw-badge,#otw-highlight')));
   }
 
-  function onMouseLeave() {
+  function onMove(e) {
+    var el = document.elementFromPoint(e.clientX, e.clientY);
+    if (!el || el === hoveredEl || isOurs(el)) return;
+    hoveredEl = el;
+    var r = el.getBoundingClientRect();
+    highlight.style.display = 'block';
+    highlight.style.top = r.top + 'px';
+    highlight.style.left = r.left + 'px';
+    highlight.style.width = r.width + 'px';
+    highlight.style.height = r.height + 'px';
+  }
+
+  function onLeave() {
     highlight.style.display = 'none';
     hoveredEl = null;
   }
 
-  function isRecorderUI(el) {
-    return el.closest('#otw-glow-border, #otw-recorder-badge, #otw-hover-highlight');
-  }
-
   // ---- Click Capture ----
   function onClick(e) {
-    const el = e.target;
-    if (isRecorderUI(el)) return;
-
+    var el = e.target;
+    if (isOurs(el)) return;
     e.preventDefault();
     e.stopPropagation();
 
-    const selector = generateSelector(el);
-    const rect = el.getBoundingClientRect();
-
     stepIndex++;
-    const step = {
+    sessionStorage.setItem('otw_step_index', String(stepIndex));
+    var r = el.getBoundingClientRect();
+
+    var step = {
       id: 'step_' + Date.now(),
       index: stepIndex,
-      selector: selector,
+      selector: genSelector(el),
       tagName: el.tagName.toLowerCase(),
       innerText: (el.innerText || '').substring(0, 100).trim(),
-      rect: {
-        x: Math.round(rect.x),
-        y: Math.round(rect.y),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      },
+      rect: { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) },
       url: location.href,
       timestamp: Date.now(),
     };
 
     send('step', { step: step });
 
-    // Flash green on captured element
-    const origOutline = el.style.outline;
+    // Flash
+    var orig = el.style.outline;
     el.style.outline = '3px solid ' + GLOW_COLOR;
-    setTimeout(function() {
-      el.style.outline = origOutline;
-    }, 500);
+    setTimeout(function() { el.style.outline = orig; }, 500);
   }
 
-  // ---- CSS Selector Generator ----
-  function generateSelector(el) {
-    // data-ontheway-id takes priority
-    if (el.dataset.onthewayId) {
-      return '[data-ontheway-id="' + el.dataset.onthewayId + '"]';
+  // ---- Selector Generator ----
+  function genSelector(el) {
+    if (el.dataset && el.dataset.onthewayId) return '[data-ontheway-id="' + el.dataset.onthewayId + '"]';
+
+    if (el.id && !/^[\d:]/.test(el.id)) {
+      try { if (document.querySelectorAll('#' + CSS.escape(el.id)).length === 1) return '#' + CSS.escape(el.id); } catch(e) {}
     }
 
-    // ID
-    if (el.id && !el.id.match(/^[\d:]/) && document.querySelectorAll('#' + CSS.escape(el.id)).length === 1) {
-      return '#' + CSS.escape(el.id);
-    }
-
-    // Build path
-    const parts = [];
-    let current = el;
-    while (current && current !== document.body && current !== document.documentElement) {
-      let part = current.tagName.toLowerCase();
-
-      if (current.id && !current.id.match(/^[\d:]/)) {
-        parts.unshift('#' + CSS.escape(current.id));
-        break;
-      }
-
-      // Use meaningful classes (skip utility classes)
-      const classes = Array.from(current.classList)
-        .filter(c => !c.match(/^(w-|h-|p-|m-|text-|bg-|flex|grid|border|rounded|hover:|focus:|sm:|md:|lg:|xl:)/))
+    var parts = [], cur = el;
+    while (cur && cur !== document.body && cur !== document.documentElement && parts.length < 4) {
+      var p = cur.tagName.toLowerCase();
+      if (cur.id && !/^[\d:]/.test(cur.id)) { parts.unshift('#' + CSS.escape(cur.id)); break; }
+      var cls = Array.from(cur.classList || [])
+        .filter(function(c) { return !/^(w-|h-|p-|m-|text-|bg-|flex|grid|border|rounded|hover:|focus:|sm:|md:|lg:|xl:)/.test(c); })
         .slice(0, 2);
-
-      if (classes.length) {
-        part += '.' + classes.map(c => CSS.escape(c)).join('.');
-      }
-
-      // nth-child if needed
-      const parent = current.parentElement;
+      if (cls.length) p += '.' + cls.map(function(c) { return CSS.escape(c); }).join('.');
+      var parent = cur.parentElement;
       if (parent) {
-        const siblings = Array.from(parent.children).filter(s => s.tagName === current.tagName);
-        if (siblings.length > 1) {
-          const idx = siblings.indexOf(current) + 1;
-          part += ':nth-child(' + idx + ')';
-        }
+        var sibs = Array.from(parent.children).filter(function(s) { return s.tagName === cur.tagName; });
+        if (sibs.length > 1) p += ':nth-child(' + (sibs.indexOf(cur) + 1) + ')';
       }
-
-      parts.unshift(part);
-      current = current.parentElement;
-
-      // Keep selector short
-      if (parts.length >= 4) break;
+      parts.unshift(p);
+      cur = cur.parentElement;
     }
 
-    const selector = parts.join(' > ');
+    var sel = parts.join(' > ');
+    try { if (document.querySelector(sel) === el) return sel; } catch(e) {}
 
-    // Validate
-    try {
-      if (document.querySelector(selector) === el) return selector;
-    } catch {}
-
-    // Fallback: full path
-    return buildFullPath(el);
-  }
-
-  function buildFullPath(el) {
-    const path = [];
-    let current = el;
-    while (current && current !== document.body) {
-      const parent = current.parentElement;
-      if (!parent) break;
-      const idx = Array.from(parent.children).indexOf(current) + 1;
-      path.unshift(current.tagName.toLowerCase() + ':nth-child(' + idx + ')');
-      current = parent;
+    // Fallback
+    parts = []; cur = el;
+    while (cur && cur !== document.body) {
+      var par = cur.parentElement;
+      if (!par) break;
+      parts.unshift(cur.tagName.toLowerCase() + ':nth-child(' + (Array.from(par.children).indexOf(cur) + 1) + ')');
+      cur = par;
     }
-    return 'body > ' + path.join(' > ');
+    return 'body > ' + parts.join(' > ');
   }
 
-  // ---- Event Listeners ----
-  document.addEventListener('mousemove', onMouseMove, true);
-  document.addEventListener('mouseleave', onMouseLeave, true);
+  // ---- Events ----
+  document.addEventListener('mousemove', onMove, true);
+  document.addEventListener('mouseleave', onLeave, true);
   document.addEventListener('click', onClick, true);
 
-  // ---- Notify Dashboard ----
+  // ---- Notify server ----
   send('connected', { url: location.href, title: document.title });
 
   // ---- Cleanup ----
   function cleanup() {
-    document.removeEventListener('mousemove', onMouseMove, true);
-    document.removeEventListener('mouseleave', onMouseLeave, true);
+    document.removeEventListener('mousemove', onMove, true);
+    document.removeEventListener('mouseleave', onLeave, true);
     document.removeEventListener('click', onClick, true);
-    glowEl.remove();
-    badge.remove();
-    highlight.remove();
-    channel.close();
+    glowEl.remove(); badge.remove(); highlight.remove(); style.remove();
+    if (channel) channel.close();
     sessionStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SERVER_KEY);
+    sessionStorage.removeItem('otw_step_index');
   }
 
-  // Expose cleanup
   window.__otw_stop_recording = cleanup;
 
   console.log(
-    '%c🛤️ OnTheWay Recorder Active %c Session: ' + sessionId,
-    'background: #22c55e; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;',
-    'color: #666;'
+    '%c🛤️ OnTheWay Recorder Active %c Session: ' + sessionId + ' | Server: ' + (serverUrl || 'same-origin'),
+    'background:#22c55e;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold',
+    'color:#666'
   );
 })();
