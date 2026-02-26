@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getProjects, getCurrentUser } from '@/lib/data'
+import { DashboardOnboarding, ReplayOnboardingButton } from '@/components/DashboardOnboarding'
 
 export default async function DashboardPage() {
   const user = await getCurrentUser()
@@ -15,10 +16,13 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Onboarding tour for new users */}
+      <DashboardOnboarding />
+
       <header className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-3 sm:py-4 flex justify-between items-center">
-          <Link href="/" className="text-lg sm:text-xl font-bold">🛤️ OnTheWay</Link>
-          <div className="flex items-center gap-2 sm:gap-4">
+          <Link href="/" id="otw-logo" className="text-lg sm:text-xl font-bold">🛤️ OnTheWay</Link>
+          <div id="otw-user-menu" className="flex items-center gap-2 sm:gap-4">
             <span className="text-gray-600 text-sm hidden sm:inline">{user.email}</span>
             <form action="/api/auth/signout" method="POST">
               <button type="submit" className="text-sm text-gray-500 hover:text-gray-700">Logout</button>
@@ -31,6 +35,7 @@ export default async function DashboardPage() {
         <div className="flex justify-between items-center mb-6 sm:mb-8">
           <h1 className="text-xl sm:text-2xl font-bold">Projects</h1>
           <Link
+            id="otw-new-project"
             href="/dashboard/projects/new"
             className="bg-black text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-gray-800 text-sm sm:text-base"
           >
@@ -38,7 +43,7 @@ export default async function DashboardPage() {
           </Link>
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div id="otw-projects-grid" className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {projects.map(project => (
             <Link
               key={project.id}
@@ -57,11 +62,17 @@ export default async function DashboardPage() {
           ))}
 
           <Link
+            id="otw-add-project"
             href="/dashboard/projects/new"
             className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 flex items-center justify-center hover:border-gray-400 transition-colors min-h-[100px]"
           >
             <span className="text-gray-500">+ Add Project</span>
           </Link>
+        </div>
+
+        {/* Footer with replay button */}
+        <div className="mt-12 text-center">
+          <ReplayOnboardingButton />
         </div>
       </main>
     </div>
