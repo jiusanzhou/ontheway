@@ -31,7 +31,7 @@
   }
 
   function loadDriverJS(callback) {
-    if (global.driver && global.driver.driver) {
+    if (getDriverFn()) {
       driverReady = true;
       callback();
       return;
@@ -58,9 +58,20 @@
     document.head.appendChild(script);
   }
 
+  function getDriverFn() {
+    // IIFE版: window.driver.js.driver (注意 .js 是属性名)
+    if (global.driver) {
+      var d = global.driver;
+      if (typeof d.driver === 'function') return d.driver;
+      if (d.js && typeof d.js.driver === 'function') return d.js.driver;
+    }
+    return null;
+  }
+
   function ensureDriver(callback) {
     loadDriverCSS();
-    if (driverReady) {
+    if (getDriverFn()) {
+      driverReady = true;
       callback();
     } else {
       loadDriverJS(callback);
@@ -189,7 +200,7 @@
     var taskRef = task;
 
     ensureDriver(function() {
-      var driverFn = global.driver && global.driver.driver;
+      var driverFn = getDriverFn();
       if (!driverFn) {
         console.error('[OnTheWay] Driver.js not available');
         return;
