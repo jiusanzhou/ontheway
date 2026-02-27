@@ -135,7 +135,7 @@ export default function DocsPage() {
           {/* Script Tag */}
           <SubSection id="install-script">Script Tag</SubSection>
           <p className="text-gray-600 mb-2">Add one line before <Code>{'</body>'}</Code>:</p>
-          <CodeBlock>{`<script src="https://ontheway.zoe.im/sdk.js" 
+          <CodeBlock>{`<script src="https://YOUR_DOMAIN/sdk.js" 
         data-project="YOUR_PROJECT_ID"></script>`}</CodeBlock>
           <p className="text-gray-500 text-sm">The SDK auto-initializes and exposes <Code>window.ontheway</Code> globally.</p>
 
@@ -166,7 +166,7 @@ export default function RootLayout({ children }) {
   return (
     <OnTheWayProvider
       projectId="YOUR_PROJECT_ID"
-      apiUrl="https://ontheway.zoe.im/api"  // optional, default
+      apiUrl="/api"  // optional, defaults to same origin
       onComplete={(taskId) => {
         console.log('Tour completed:', taskId)
         // e.g. track in analytics

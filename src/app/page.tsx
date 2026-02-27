@@ -52,7 +52,7 @@ export default function Home() {
               <code className="text-sm sm:text-[13px] leading-relaxed">
                 <span className="text-gray-500">{'<!-- One line to activate -->'}</span>{'\n'}
                 <span className="text-pink-400">{'<script'}</span>{' '}
-                <span className="text-sky-300">src</span><span className="text-gray-500">=</span><span className="text-green-300">{'"https://ontheway.zoe.im/sdk.js"'}</span>{'\n'}
+                <span className="text-sky-300">src</span><span className="text-gray-500">=</span><span className="text-green-300">{'"https://YOUR_DOMAIN/sdk.js"'}</span>{'\n'}
                 {'  '}<span className="text-sky-300">data-project</span><span className="text-gray-500">=</span><span className="text-green-300">{'"YOUR_PROJECT_ID"'}</span>
                 <span className="text-pink-400">{'>'}</span>
                 <span className="text-pink-400">{'</script>'}</span>

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getProject, getTasks, getCurrentUser } from '@/lib/data'
+import { InstallSnippet } from '@/components/InstallSnippet'
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser()
@@ -47,13 +48,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           </div>
 
           {/* Installation */}
-          <div className="mt-4">
-            <span className="text-sm font-medium block mb-2">Installation</span>
-            <pre className="bg-gray-900 text-green-400 p-3 sm:p-4 rounded-lg text-xs sm:text-sm overflow-x-auto">
-{`<script src="https://ontheway.zoe.im/sdk.js"
-        data-project="${project.id}"></script>`}
-            </pre>
-          </div>
+          <InstallSnippet projectId={project.id} />
         </div>
 
         {/* Tasks */}

@@ -55,7 +55,7 @@ export class OnTheWay {
 
   constructor(config: OnTheWayConfig) {
     this.config = {
-      apiUrl: 'https://ontheway.zoe.im/api',
+      apiUrl: '/api',
       ...config
     }
     this.state = {
