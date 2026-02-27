@@ -1,59 +1,59 @@
 'use client'
 
 import { useState } from 'react'
-import { driver } from 'driver.js'
-import 'driver.js/dist/driver.css'
-import { OnTheWayDevToolsPanel } from '@/lib/sdk/devtools'
+import dynamic from 'next/dynamic'
+
+const OnTheWayDevToolsPanel = dynamic(() => import('@/lib/sdk/devtools'), { ssr: false })
 
 export default function DemoPage() {
   const [showFeatures, setShowFeatures] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const startTour = () => {
-    // 移动端先关闭侧边栏
     setSidebarOpen(false)
-
-    const driverObj = driver({
-      showProgress: true,
-      steps: [
-        { 
-          element: '#demo-header', 
-          popover: { 
-            title: 'Welcome to the Demo!', 
-            description: 'This is how OnTheWay tours work. Click Next to continue.',
-            side: 'bottom'
-          } 
-        },
-        { 
-          element: '#demo-stats', 
-          popover: { 
-            title: 'Key Metrics', 
-            description: 'Track your projects, tasks and completion rates at a glance.',
-            side: 'bottom'
-          } 
-        },
-        { 
-          element: '#demo-main', 
-          popover: { 
-            title: 'Main Content', 
-            description: 'This is where your main content lives.',
-            side: 'top'
-          } 
-        },
-        { 
-          element: '#demo-action', 
-          popover: { 
-            title: 'Take Action!', 
-            description: 'Click this button to perform the main action. Tour complete!',
-            side: 'bottom'
-          } 
-        },
-      ],
-      onDestroyStarted: () => {
-        driverObj.destroy()
-      }
+    import('driver.js').then(({ driver }) => {
+      const driverObj = driver({
+        showProgress: true,
+        steps: [
+          { 
+            element: '#demo-header', 
+            popover: { 
+              title: 'Welcome to the Demo!', 
+              description: 'This is how OnTheWay tours work. Click Next to continue.',
+              side: 'bottom' as const
+            } 
+          },
+          { 
+            element: '#demo-stats', 
+            popover: { 
+              title: 'Key Metrics', 
+              description: 'Track your projects, tasks and completion rates at a glance.',
+              side: 'bottom' as const
+            } 
+          },
+          { 
+            element: '#demo-main', 
+            popover: { 
+              title: 'Main Content', 
+              description: 'This is where your main content lives.',
+              side: 'top' as const
+            } 
+          },
+          { 
+            element: '#demo-action', 
+            popover: { 
+              title: 'Take Action!', 
+              description: 'Click this button to perform the main action. Tour complete!',
+              side: 'bottom' as const
+            } 
+          },
+        ],
+        onDestroyStarted: () => {
+          driverObj.destroy()
+        }
+      })
+      driverObj.drive()
     })
-    driverObj.drive()
   }
 
   return (
