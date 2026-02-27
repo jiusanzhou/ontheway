@@ -61,7 +61,10 @@ export default function DocsPage() {
       {/* Header */}
       <header className="border-b sticky top-0 bg-white z-10">
         <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="text-xl font-bold">🛤️ OnTheWay</Link>
+          <Link href="/" className="text-xl font-bold flex items-center gap-2">
+            <img src="/logo.svg" alt="OnTheWay" className="w-7 h-7" />
+            <span>OnTheWay</span>
+          </Link>
           <nav className="flex gap-4">
             <Link href="/dashboard" className="hover:underline">Dashboard</Link>
             <Link href="/demo" className="hover:underline">Demo</Link>

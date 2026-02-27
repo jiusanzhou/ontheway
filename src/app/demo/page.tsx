@@ -74,7 +74,10 @@ export default function DemoPage() {
               }
             </svg>
           </button>
-          <h1 className="text-lg sm:text-xl font-bold">🛤️ Demo App</h1>
+          <h1 className="text-lg sm:text-xl font-bold flex items-center gap-2">
+            <img src="/logo.svg" alt="OnTheWay" className="w-7 h-7" />
+            Demo App
+          </h1>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
           <button 

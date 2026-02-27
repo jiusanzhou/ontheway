@@ -560,6 +560,9 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
     return () => { style.remove() }
   }, [])
 
+  // Inline SVG logo (same as public/logo.svg but as data URI)
+  const logoSvg = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="10" fill="#111"/><path d="M12 32 C12 24,16 22,20 20 C24 18,28 16,28 8" stroke="#22c55e" stroke-width="3.5" stroke-linecap="round" fill="none"/><path d="M12 32 C12 24,16 22,20 20 C24 18,28 16,28 8" stroke="#fff" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="2.5 3.5" fill="none" opacity="0.6"/><circle cx="28" cy="8" r="3.5" fill="#22c55e"/><circle cx="28" cy="8" r="1.5" fill="#111"/><circle cx="12" cy="32" r="2.5" fill="#fff" opacity="0.9"/></svg>')}`
+
   if (minimized) {
     return (
       <div ref={panelRef} style={S.panel}>
@@ -575,7 +578,7 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
             <span style={{ display: 'flex', alignItems: 'center' }}>
               <span style={S.recDot} />
             </span>
-          ) : '🛤️'}
+          ) : <img src={logoSvg} alt="OTW" style={{ width: 24, height: 24 }} />}
         </button>
       </div>
     )
@@ -586,7 +589,10 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
       <div style={S.card}>
         {/* Header */}
         <div style={S.header}>
-          <span>🛤️ OnTheWay DevTools</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <img src={logoSvg} alt="OTW" style={{ width: 18, height: 18 }} />
+            OnTheWay DevTools
+          </span>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {recording && <span style={{ display: 'flex', alignItems: 'center', fontSize: 11 }}><span style={S.recDot} /> REC</span>}
             <button onClick={() => setMinimized(true)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 16 }}>−</button>

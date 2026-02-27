@@ -23,7 +23,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       <header className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-3 sm:py-4 flex justify-between items-center">
           <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-            <Link href="/dashboard" className="text-lg sm:text-xl font-bold shrink-0">🛤️</Link>
+            <Link href="/dashboard" className="text-lg sm:text-xl font-bold shrink-0">
+              <img src="/logo.svg" alt="OnTheWay" className="w-7 h-7" />
+            </Link>
             <span className="text-gray-300 hidden sm:inline">/</span>
             <span className="font-medium truncate text-sm sm:text-base">{project.name}</span>
           </div>

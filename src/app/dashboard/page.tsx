@@ -22,7 +22,10 @@ export default async function DashboardPage() {
 
       <header className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-3 sm:py-4 flex justify-between items-center">
-          <Link href="/" id="otw-logo" className="text-lg sm:text-xl font-bold">🛤️ OnTheWay</Link>
+          <Link href="/" id="otw-logo" className="text-lg sm:text-xl font-bold flex items-center gap-2">
+            <img src="/logo.svg" alt="OnTheWay" className="w-7 h-7" />
+            <span>OnTheWay</span>
+          </Link>
           <div id="otw-user-menu" className="flex items-center gap-2 sm:gap-4">
             <span className="text-gray-600 text-sm hidden sm:inline">{user.email}</span>
             <form action="/api/auth/signout" method="POST">
