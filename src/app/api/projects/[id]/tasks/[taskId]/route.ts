@@ -1,20 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTask, updateTask, deleteTask, getCurrentUser } from '@/lib/data'
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string; taskId: string }> }
-) {
-  const user = await getCurrentUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const { taskId } = await params
-  const task = await getTask(taskId)
-  if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-  return NextResponse.json({ task })
-}
-
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; taskId: string }> }
@@ -23,8 +9,10 @@ export async function PATCH(
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { taskId } = await params
-  const body = await request.json()
+  const existing = await getTask(taskId)
+  if (!existing) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
+  const body = await request.json()
   try {
     const task = await updateTask(taskId, body)
     return NextResponse.json({ task })
