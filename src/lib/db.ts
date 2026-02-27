@@ -21,6 +21,7 @@ export async function query<T = Record<string, unknown>>(
       'Neon-Connection-String': dbUrl,
     },
     body: JSON.stringify({ query: sql, params }),
+    cache: 'no-store',
   })
 
   if (!res.ok) {
@@ -30,18 +31,11 @@ export async function query<T = Record<string, unknown>>(
 
   const data = await res.json()
 
-  // Neon returns { rows: [...], columns: [...], ... }
-  // rows is array of arrays, columns is array of column names
-  // Convert to array of objects
-  if (!data.rows || !data.columns) return []
-
-  return data.rows.map((row: unknown[]) => {
-    const obj: Record<string, unknown> = {}
-    data.columns.forEach((col: string, i: number) => {
-      obj[col] = row[i]
-    })
-    return obj as T
-  })
+  // Neon HTTP API returns:
+  // { fields: [{name: "col", ...}], rows: [{col: value, ...}], command, rowCount }
+  // rows is already an array of objects (not arrays)
+  if (!data.rows) return []
+  return data.rows as T[]
 }
 
 // Helper for queries that return a single row
