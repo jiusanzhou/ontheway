@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none">
+  <!-- Road/path shape -->
+  <rect width="40" height="40" rx="10" fill="#111"/>
+  <!-- Stylized road with curves -->
+  <path d="M12 32 C12 24, 16 22, 20 20 C24 18, 28 16, 28 8" stroke="#22c55e" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <!-- Dashed center line -->
+  <path d="M12 32 C12 24, 16 22, 20 20 C24 18, 28 16, 28 8" stroke="#fff" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="2.5 3.5" fill="none" opacity="0.6"/>
+  <!-- Destination pin -->
+  <circle cx="28" cy="8" r="3.5" fill="#22c55e"/>
+  <circle cx="28" cy="8" r="1.5" fill="#111"/>
+  <!-- Start dot -->
+  <circle cx="12" cy="32" r="2.5" fill="#fff" opacity="0.9"/>
+</svg>

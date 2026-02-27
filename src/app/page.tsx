@@ -6,7 +6,10 @@ export default function Home() {
       {/* Header */}
       <header className="border-b sticky top-0 bg-white/80 backdrop-blur-sm z-10">
         <div className="max-w-6xl mx-auto px-4 py-3 sm:py-4 flex justify-between items-center">
-          <h1 className="text-lg sm:text-xl font-bold">🛤️ OnTheWay</h1>
+          <h1 className="text-lg sm:text-xl font-bold flex items-center gap-2">
+            <img src="/logo.svg" alt="OnTheWay" className="w-7 h-7 sm:w-8 sm:h-8" />
+            <span>OnTheWay</span>
+          </h1>
           <nav className="flex items-center gap-3 sm:gap-6 text-sm">
             <Link href="/demo" className="text-gray-600 hover:text-black transition-colors">Demo</Link>
             <Link href="/docs" className="text-gray-600 hover:text-black transition-colors">Docs</Link>
