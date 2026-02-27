@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { driver } from 'driver.js'
 import 'driver.js/dist/driver.css'
+import { OnTheWayDevToolsPanel } from '@/lib/sdk/devtools'
 
 export default function DemoPage() {
   const [showFeatures, setShowFeatures] = useState(false)
@@ -169,6 +170,14 @@ export default function DemoPage() {
           </div>
         </main>
       </div>
+
+      {/* DevTools - only show in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <OnTheWayDevToolsPanel
+          projectId="6fea4487-17a3-49f5-ad62-1689cf566b57"
+          apiKey="otw_ee5610b924b1a0716565c954f2847b49"
+        />
+      )}
     </div>
   )
 }
