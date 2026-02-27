@@ -1,3 +1,4 @@
+// CDN: https://cdn.jsdelivr.net/gh/jiusanzhou/ontheway@main/public/sdk.js
 /**
  * OnTheWay SDK (standalone, CDN-ready)
  * 

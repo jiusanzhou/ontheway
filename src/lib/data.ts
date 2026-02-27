@@ -149,6 +149,20 @@ export async function deleteTask(taskId: string): Promise<void> {
   if (error) throw error
 }
 
+// ============ Plans & Usage ============
+
+export async function getUserPlan(userId: string): Promise<'free' | 'pro' | 'enterprise'> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('user_plans')
+    .select('plan')
+    .eq('user_id', userId)
+    .single()
+
+  if (!data) return 'free'
+  return data.plan as 'free' | 'pro' | 'enterprise'
+}
+
 // ============ Auth helpers ============
 
 export async function getCurrentUser() {

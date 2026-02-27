@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getProjects, getCurrentUser } from '@/lib/data'
+import { getProjects, getCurrentUser, getUserPlan } from '@/lib/data'
 import { DashboardOnboarding, ReplayOnboardingButton, HelpFloatingMenu } from '@/components/DashboardOnboarding'
 
 export default async function DashboardPage() {
@@ -8,10 +8,16 @@ export default async function DashboardPage() {
   if (!user) redirect('/login')
 
   let projects: Awaited<ReturnType<typeof getProjects>> = []
+  let plan: 'free' | 'pro' | 'enterprise' = 'free'
   try {
     projects = await getProjects()
   } catch {
     // DB not connected yet, show empty state
+  }
+  try {
+    plan = await getUserPlan(user.id)
+  } catch {
+    // Default to free
   }
 
   return (
@@ -78,6 +84,24 @@ export default async function DashboardPage() {
         <div className="mt-12 text-center">
           <ReplayOnboardingButton />
         </div>
+
+        {/* Upgrade banner for free plan users */}
+        {plan === 'free' && (
+          <div className="mt-8 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <h3 className="font-bold text-lg mb-1">Upgrade to Pro</h3>
+              <p className="text-gray-300 text-sm">
+                Unlock unlimited projects, tasks, 50K views/mo, analytics & custom branding.
+              </p>
+            </div>
+            <a
+              href="/api/stripe/checkout"
+              className="shrink-0 bg-white text-black px-6 py-2.5 rounded-xl hover:bg-gray-100 transition-all text-sm font-medium"
+            >
+              Upgrade — $19/mo
+            </a>
+          </div>
+        )}
       </main>
     </div>
   )

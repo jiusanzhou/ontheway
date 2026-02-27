@@ -58,6 +58,27 @@ export interface CapturedStep {
   timestamp: number
 }
 
+// User plans & usage
+export interface UserPlan {
+  id: string
+  user_id: string
+  plan: 'free' | 'pro' | 'enterprise'
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  current_period_start: string | null
+  current_period_end: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface UsageRecord {
+  id: string
+  user_id: string
+  month: string
+  sdk_views: number
+  projects_count: number
+}
+
 // SDK 配置
 export interface SDKConfig {
   project_id: string

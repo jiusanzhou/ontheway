@@ -180,6 +180,64 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Pricing */}
+      <section className="py-16 sm:py-24">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="text-center mb-12 sm:mb-16">
+            <h3 className="text-2xl sm:text-4xl font-bold mb-3">Simple, transparent pricing</h3>
+            <p className="text-gray-500 text-base sm:text-lg">Start free, upgrade when you need more</p>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto">
+            {/* Free */}
+            <div className="bg-white rounded-2xl border p-6 sm:p-8 flex flex-col">
+              <h4 className="font-bold text-lg mb-1">Free</h4>
+              <div className="text-3xl font-bold mb-4">$0<span className="text-base font-normal text-gray-500">/mo</span></div>
+              <ul className="text-sm text-gray-600 space-y-2 mb-8 flex-1">
+                <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span>3 projects</li>
+                <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span>5 tasks per project</li>
+                <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span>1,000 views/mo</li>
+                <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span>Community support</li>
+              </ul>
+              <Link href="/dashboard" className="block text-center border border-gray-300 px-6 py-2.5 rounded-xl hover:bg-gray-50 transition-all text-sm font-medium">
+                Get Started
+              </Link>
+            </div>
+            {/* Pro */}
+            <div className="bg-white rounded-2xl border-2 border-black p-6 sm:p-8 flex flex-col relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-black text-white text-xs font-medium px-3 py-1 rounded-full">Most Popular</div>
+              <h4 className="font-bold text-lg mb-1">Pro</h4>
+              <div className="text-3xl font-bold mb-4">$19<span className="text-base font-normal text-gray-500">/mo</span></div>
+              <ul className="text-sm text-gray-600 space-y-2 mb-8 flex-1">
+                <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span>Unlimited projects</li>
+                <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span>Unlimited tasks</li>
+                <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span>50,000 views/mo</li>
+                <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span>Priority support</li>
+                <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span>Analytics dashboard</li>
+                <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span>Custom branding</li>
+              </ul>
+              <Link href="/dashboard?plan=pro" className="block text-center bg-black text-white px-6 py-2.5 rounded-xl hover:bg-gray-800 transition-all text-sm font-medium">
+                Upgrade to Pro
+              </Link>
+            </div>
+            {/* Enterprise */}
+            <div className="bg-white rounded-2xl border p-6 sm:p-8 flex flex-col">
+              <h4 className="font-bold text-lg mb-1">Enterprise</h4>
+              <div className="text-3xl font-bold mb-4">Custom</div>
+              <ul className="text-sm text-gray-600 space-y-2 mb-8 flex-1">
+                <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span>Everything in Pro</li>
+                <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span>Unlimited views</li>
+                <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span>SSO / SAML</li>
+                <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span>SLA</li>
+                <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span>Dedicated support</li>
+              </ul>
+              <a href="mailto:hi@zoe.im" className="block text-center border border-gray-300 px-6 py-2.5 rounded-xl hover:bg-gray-50 transition-all text-sm font-medium">
+                Contact Us
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="py-16 sm:py-24">
         <div className="max-w-2xl mx-auto px-4 text-center">
