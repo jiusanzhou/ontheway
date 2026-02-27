@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -20,27 +19,29 @@ export default function LoginPage() {
     setError('')
     setMessage('')
 
-    const supabase = createClient()
+    const endpoint = isSignUp ? '/api/auth/signup' : '/api/auth/signin'
 
-    if (isSignUp) {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: `${window.location.origin}/dashboard` },
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       })
-      if (error) {
-        setError(error.message)
-      } else {
-        setMessage('Check your email for the confirmation link.')
-      }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) {
-        setError(error.message)
+
+      const data = await res.json()
+
+      if (!res.ok || data.error) {
+        setError(data.error || 'Something went wrong')
+      } else if (isSignUp) {
+        // Account created, redirect to dashboard
+        router.push('/dashboard')
+        router.refresh()
       } else {
         router.push('/dashboard')
         router.refresh()
       }
+    } catch {
+      setError('Network error. Please try again.')
     }
 
     setLoading(false)

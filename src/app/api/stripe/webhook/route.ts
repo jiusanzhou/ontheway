@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { handleWebhook } from '@/lib/stripe'
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!
+import { query, queryOne } from '@/lib/db'
 
 export async function POST(request: NextRequest) {
   const body = await request.text()
@@ -15,7 +12,6 @@ export async function POST(request: NextRequest) {
 
   try {
     const event = await handleWebhook(body, signature)
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -23,19 +19,43 @@ export async function POST(request: NextRequest) {
         const userId = session.client_reference_id || session.metadata?.user_id
         if (!userId) break
 
-        await supabase.from('user_plans').upsert(
-          {
-            user_id: userId,
-            plan: 'pro',
-            stripe_customer_id: session.customer,
-            stripe_subscription_id: session.subscription,
-            current_period_start: new Date().toISOString(),
-            current_period_end: new Date(
-              Date.now() + 30 * 24 * 60 * 60 * 1000
-            ).toISOString(),
-          },
-          { onConflict: 'user_id' }
+        // Upsert user_plans
+        const existing = await queryOne<{ user_id: string }>(
+          'SELECT user_id FROM user_plans WHERE user_id = $1',
+          [userId]
         )
+
+        if (existing) {
+          await query(
+            `UPDATE user_plans SET
+              plan = 'pro',
+              stripe_customer_id = $1,
+              stripe_subscription_id = $2,
+              current_period_start = $3,
+              current_period_end = $4,
+              updated_at = now()
+            WHERE user_id = $5`,
+            [
+              session.customer,
+              session.subscription,
+              new Date().toISOString(),
+              new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              userId,
+            ]
+          )
+        } else {
+          await query(
+            `INSERT INTO user_plans (user_id, plan, stripe_customer_id, stripe_subscription_id, current_period_start, current_period_end)
+             VALUES ($1, 'pro', $2, $3, $4, $5)`,
+            [
+              userId,
+              session.customer,
+              session.subscription,
+              new Date().toISOString(),
+              new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            ]
+          )
+        }
         break
       }
 
@@ -43,29 +63,29 @@ export async function POST(request: NextRequest) {
         const subscription = event.data.object
         const customerId = subscription.customer
 
-        // Find user by stripe_customer_id
-        const { data: userPlan } = await supabase
-          .from('user_plans')
-          .select('user_id')
-          .eq('stripe_customer_id', customerId)
-          .single()
+        const userPlan = await queryOne<{ user_id: string }>(
+          'SELECT user_id FROM user_plans WHERE stripe_customer_id = $1',
+          [customerId]
+        )
 
         if (userPlan) {
           const status = subscription.status
           const plan = status === 'active' ? 'pro' : 'free'
 
-          await supabase
-            .from('user_plans')
-            .update({
+          await query(
+            `UPDATE user_plans SET
+              plan = $1,
+              current_period_start = $2,
+              current_period_end = $3,
+              updated_at = now()
+            WHERE user_id = $4`,
+            [
               plan,
-              current_period_start: new Date(
-                subscription.current_period_start * 1000
-              ).toISOString(),
-              current_period_end: new Date(
-                subscription.current_period_end * 1000
-              ).toISOString(),
-            })
-            .eq('user_id', userPlan.user_id)
+              new Date(subscription.current_period_start * 1000).toISOString(),
+              new Date(subscription.current_period_end * 1000).toISOString(),
+              userPlan.user_id,
+            ]
+          )
         }
         break
       }
@@ -74,17 +94,16 @@ export async function POST(request: NextRequest) {
         const subscription = event.data.object
         const customerId = subscription.customer
 
-        const { data: userPlan } = await supabase
-          .from('user_plans')
-          .select('user_id')
-          .eq('stripe_customer_id', customerId)
-          .single()
+        const userPlan = await queryOne<{ user_id: string }>(
+          'SELECT user_id FROM user_plans WHERE stripe_customer_id = $1',
+          [customerId]
+        )
 
         if (userPlan) {
-          await supabase
-            .from('user_plans')
-            .update({ plan: 'free' })
-            .eq('user_id', userPlan.user_id)
+          await query(
+            `UPDATE user_plans SET plan = 'free', updated_at = now() WHERE user_id = $1`,
+            [userPlan.user_id]
+          )
         }
         break
       }

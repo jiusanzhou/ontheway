@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { query } from '@/lib/db'
 import { incrementViews } from '@/lib/limits'
-
-// Public API - no auth required, uses API key
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -28,7 +24,6 @@ function domainMatches(projectDomain: string, origin: string | null, referer: st
   const check = (url: string) => {
     try {
       const hostname = new URL(url).hostname
-      // exact match or subdomain match
       return hostname === projectDomain || hostname.endsWith(`.${projectDomain}`)
     } catch {
       return false
@@ -44,19 +39,16 @@ export async function GET(
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   const { projectId } = await params
-  
-  // Create service client for public API
-  const supabase = createClient(supabaseUrl, supabaseServiceKey)
-  
-  // Fetch project (include domain and user_id for validation/usage)
-  const { data: project, error: projectError } = await supabase
-    .from('projects')
-    .select('id, name, domain, user_id')
-    .eq('id', projectId)
-    .single()
-  
-  if (projectError || !project) {
-    return NextResponse.json({ error: 'Project not found' }, { 
+
+  // Fetch project
+  const projects = await query<{ id: string; name: string; domain: string; user_id: string }>(
+    'SELECT id, name, domain, user_id FROM projects WHERE id = $1',
+    [projectId]
+  )
+  const project = projects[0]
+
+  if (!project) {
+    return NextResponse.json({ error: 'Project not found' }, {
       status: 404,
       headers: CORS_HEADERS,
     })
@@ -74,44 +66,47 @@ export async function GET(
       )
     }
   }
-  
-  const { data: tasks, error: tasksError } = await supabase
-    .from('tasks')
-    .select('id, slug, trigger, steps, targeting')
-    .eq('project_id', projectId)
-    .eq('enabled', true)
-  
-  if (tasksError) {
-    return NextResponse.json({ error: 'Failed to fetch tasks' }, { 
-      status: 500,
-      headers: CORS_HEADERS,
-    })
-  }
+
+  const tasks = await query<{
+    id: string
+    slug: string
+    trigger: string
+    steps: unknown
+    targeting: unknown
+  }>(
+    'SELECT id, slug, trigger, steps, targeting FROM tasks WHERE project_id = $1 AND enabled = true',
+    [projectId]
+  )
 
   // Increment views count (fire-and-forget, don't block response)
   incrementViews(project.user_id).catch(() => {})
-  
+
   // Transform steps to SDK format
-  const sdkTasks = (tasks || []).map(task => ({
-    id: task.id,
-    slug: task.slug,
-    trigger: task.trigger,
-    targeting: task.targeting || {},
-    steps: (task.steps as Array<{
-      selector: string
-      title: string
-      content: string
-      position?: string
-    }>).map(step => ({
-      element: step.selector,
-      popover: {
-        title: step.title,
-        description: step.content,
-        side: step.position || 'auto'
-      }
-    }))
-  }))
-  
+  const sdkTasks = (tasks || []).map(task => {
+    const steps = typeof task.steps === 'string' ? JSON.parse(task.steps) : (task.steps || [])
+    const targeting = typeof task.targeting === 'string' ? JSON.parse(task.targeting) : (task.targeting || {})
+
+    return {
+      id: task.id,
+      slug: task.slug,
+      trigger: task.trigger,
+      targeting,
+      steps: (steps as Array<{
+        selector: string
+        title: string
+        content: string
+        position?: string
+      }>).map(step => ({
+        element: step.selector,
+        popover: {
+          title: step.title,
+          description: step.content,
+          side: step.position || 'auto'
+        }
+      }))
+    }
+  })
+
   return NextResponse.json({
     project_id: projectId,
     tasks: sdkTasks

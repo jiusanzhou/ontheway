@@ -1,11 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!
-
-function getServiceClient() {
-  return createClient(supabaseUrl, supabaseServiceKey)
-}
+import { query, queryOne, queryCount } from './db'
 
 export const PLAN_LIMITS = {
   free: { projects: 3, tasks: 5, views: 1000 },
@@ -16,15 +9,13 @@ export const PLAN_LIMITS = {
 export type PlanType = keyof typeof PLAN_LIMITS
 
 export async function getPlan(userId: string): Promise<PlanType> {
-  const supabase = getServiceClient()
-  const { data } = await supabase
-    .from('user_plans')
-    .select('plan')
-    .eq('user_id', userId)
-    .single()
+  const row = await queryOne<{ plan: string }>(
+    'SELECT plan FROM user_plans WHERE user_id = $1',
+    [userId]
+  )
 
-  if (!data) return 'free'
-  return data.plan as PlanType
+  if (!row) return 'free'
+  return row.plan as PlanType
 }
 
 function getCurrentMonth(): string {
@@ -39,15 +30,11 @@ export async function checkLimit(
   const plan = await getPlan(userId)
   const limits = PLAN_LIMITS[plan]
 
-  const supabase = getServiceClient()
-
   if (resource === 'projects') {
-    const { count } = await supabase
-      .from('projects')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-
-    const current = count || 0
+    const current = await queryCount(
+      'SELECT COUNT(*) as count FROM projects WHERE user_id = $1',
+      [userId]
+    )
     const limit = limits.projects
     return {
       allowed: limit === -1 || current < limit,
@@ -58,14 +45,12 @@ export async function checkLimit(
 
   if (resource === 'views') {
     const month = getCurrentMonth()
-    const { data } = await supabase
-      .from('usage_records')
-      .select('sdk_views')
-      .eq('user_id', userId)
-      .eq('month', month)
-      .single()
+    const row = await queryOne<{ sdk_views: number | string }>(
+      'SELECT sdk_views FROM usage_records WHERE user_id = $1 AND month = $2',
+      [userId, month]
+    )
 
-    const current = data?.sdk_views || 0
+    const current = row ? (typeof row.sdk_views === 'string' ? parseInt(row.sdk_views, 10) : row.sdk_views) : 0
     const limit = limits.views
     return {
       allowed: limit === -1 || current < limit,
@@ -78,25 +63,23 @@ export async function checkLimit(
 }
 
 export async function incrementViews(userId: string): Promise<void> {
-  const supabase = getServiceClient()
   const month = getCurrentMonth()
 
-  // Upsert: insert or increment
-  const { data: existing } = await supabase
-    .from('usage_records')
-    .select('id, sdk_views')
-    .eq('user_id', userId)
-    .eq('month', month)
-    .single()
+  const existing = await queryOne<{ id: string; sdk_views: number | string }>(
+    'SELECT id, sdk_views FROM usage_records WHERE user_id = $1 AND month = $2',
+    [userId, month]
+  )
 
   if (existing) {
-    await supabase
-      .from('usage_records')
-      .update({ sdk_views: existing.sdk_views + 1 })
-      .eq('id', existing.id)
+    const currentViews = typeof existing.sdk_views === 'string' ? parseInt(existing.sdk_views, 10) : existing.sdk_views
+    await query(
+      'UPDATE usage_records SET sdk_views = $1 WHERE id = $2',
+      [currentViews + 1, existing.id]
+    )
   } else {
-    await supabase
-      .from('usage_records')
-      .insert({ user_id: userId, month, sdk_views: 1 })
+    await query(
+      'INSERT INTO usage_records (user_id, month, sdk_views) VALUES ($1, $2, 1)',
+      [userId, month]
+    )
   }
 }
