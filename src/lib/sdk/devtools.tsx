@@ -115,6 +115,10 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
 
+  // AI generation
+  const [aiIntent, setAiIntent] = useState('')
+  const [aiGenerating, setAiGenerating] = useState(false)
+
   // Tasks list
   const [tasks, setTasks] = useState<Task[]>([])
   const [loadingTasks, setLoadingTasks] = useState(false)
@@ -265,6 +269,112 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
       return next
     })
   }
+
+  // ---- DOM extraction for AI ----
+  const extractDOM = useCallback(() => {
+    const walk = (el: Element, depth: number): string => {
+      if (depth > 6) return ''
+      const tag = el.tagName.toLowerCase()
+      // Skip our devtools, scripts, styles, hidden elements
+      if (['script', 'style', 'noscript', 'svg', 'path'].includes(tag)) return ''
+      if (el.id?.startsWith('otw-')) return ''
+      if ((el as HTMLElement).offsetParent === null && tag !== 'body' && tag !== 'html') return ''
+
+      const attrs: string[] = []
+      if (el.id) attrs.push(`id="${el.id}"`)
+      if (el.className && typeof el.className === 'string') {
+        const cls = el.className.split(/\s+/).filter(c =>
+          !/^(w-|h-|p-|m-|text-|bg-|flex|grid|border|rounded|shadow|transition|transform|hover:|focus:|sm:|md:|lg:|xl:|2xl:)/.test(c)
+        ).slice(0, 3).join(' ')
+        if (cls) attrs.push(`class="${cls}"`)
+      }
+      if ((el as HTMLInputElement).type) attrs.push(`type="${(el as HTMLInputElement).type}"`)
+      if ((el as HTMLInputElement).name) attrs.push(`name="${(el as HTMLInputElement).name}"`)
+      if ((el as HTMLInputElement).placeholder) attrs.push(`placeholder="${(el as HTMLInputElement).placeholder}"`)
+      if ((el as HTMLAnchorElement).href && tag === 'a') attrs.push(`href="..."`)
+      const ds = (el as HTMLElement).dataset
+      if (ds?.onthewayId) attrs.push(`data-ontheway-id="${ds.onthewayId}"`)
+
+      const indent = '  '.repeat(depth)
+      const attrStr = attrs.length ? ' ' + attrs.join(' ') : ''
+
+      // Leaf text
+      const text = Array.from(el.childNodes)
+        .filter(n => n.nodeType === 3)
+        .map(n => n.textContent?.trim())
+        .filter(Boolean)
+        .join(' ')
+        .substring(0, 60)
+
+      const children = Array.from(el.children)
+        .map(c => walk(c, depth + 1))
+        .filter(Boolean)
+        .join('\n')
+
+      if (!children && !text && !['input', 'button', 'img', 'video', 'iframe'].includes(tag)) {
+        return ''
+      }
+
+      if (!children) {
+        return `${indent}<${tag}${attrStr}>${text ? ' ' + text + ' ' : ''}</${tag}>`
+      }
+      return `${indent}<${tag}${attrStr}>${text ? ' ' + text : ''}\n${children}\n${indent}</${tag}>`
+    }
+
+    return walk(document.body, 0)
+  }, [])
+
+  // ---- AI Generate ----
+  const aiGenerate = useCallback(async () => {
+    if (!aiIntent.trim()) {
+      setSaveMsg('❌ Describe what the tour should do')
+      return
+    }
+    setAiGenerating(true)
+    setSaveMsg('')
+
+    try {
+      const dom = extractDOM()
+      const res = await fetch(`${baseUrl}/api/ai/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          intent: aiIntent,
+          dom,
+          url: location.href,
+          taskName: taskName || undefined,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (data.steps && data.steps.length > 0) {
+        const newSteps: RecordedStep[] = data.steps.map((s: Record<string, unknown>, i: number) => ({
+          id: 'ai_' + Date.now() + '_' + i,
+          selector: (s.selector as string) || '',
+          tagName: '',
+          innerText: '',
+          title: (s.title as string) || `Step ${i + 1}`,
+          description: (s.content as string) || (s.description as string) || '',
+          position: (s.position as RecordedStep['position']) || 'auto',
+          spotlight: s.spotlight !== false,
+          url: location.href,
+        }))
+
+        setSteps(prev => [...prev, ...newSteps])
+        if (!taskName && data.taskName) {
+          setTaskName(data.taskName)
+        }
+        setEditingStep(newSteps[0].id)
+        setSaveMsg(`✨ ${newSteps.length} steps generated (${data.source})`)
+      } else {
+        setSaveMsg('❌ No steps generated')
+      }
+    } catch {
+      setSaveMsg('❌ AI generation failed')
+    }
+    setAiGenerating(false)
+  }, [aiIntent, baseUrl, extractDOM, taskName])
 
   // ---- Save task ----
   const saveTask = async () => {
@@ -517,10 +627,10 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
               </div>
 
               {/* Recording controls */}
-              <div style={{ ...S.section, display: 'flex', gap: 8 }}>
+              <div style={{ ...S.section, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {!recording ? (
                   <button style={S.btn('#22c55e')} onClick={startRecording}>
-                    ⏺ Start Recording
+                    ⏺ Record
                   </button>
                 ) : (
                   <button style={S.btn('#ef4444')} onClick={stopRecording}>
@@ -530,7 +640,28 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
                 <button style={S.btn('#111', saving || steps.length === 0 || !taskName)} onClick={saveTask} disabled={saving || steps.length === 0 || !taskName}>
                   {saving ? '...' : '💾 Save'}
                 </button>
-                {saveMsg && <span style={{ fontSize: 11, lineHeight: '28px' }}>{saveMsg}</span>}
+              </div>
+
+              {/* AI Generate */}
+              <div style={S.section}>
+                <label style={S.label}>✨ AI Generate</label>
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  <input
+                    style={{ ...S.input, flex: 1, marginTop: 0 }}
+                    value={aiIntent}
+                    onChange={e => setAiIntent(e.target.value)}
+                    placeholder="e.g. Guide new users to create their first project"
+                    onKeyDown={e => { if (e.key === 'Enter' && !aiGenerating) aiGenerate() }}
+                  />
+                  <button
+                    style={S.btn('#7c3aed', aiGenerating || !aiIntent.trim())}
+                    onClick={aiGenerate}
+                    disabled={aiGenerating || !aiIntent.trim()}
+                  >
+                    {aiGenerating ? '...' : '✨'}
+                  </button>
+                </div>
+                {saveMsg && <div style={{ fontSize: 11, marginTop: 4, color: saveMsg.startsWith('✅') || saveMsg.startsWith('✨') ? '#16a34a' : saveMsg.startsWith('❌') ? '#dc2626' : '#6b7280' }}>{saveMsg}</div>}
               </div>
 
               {/* Steps */}
