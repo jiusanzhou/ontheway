@@ -421,6 +421,8 @@ export class OnTheWay {
       showProgress: true,
       progressText: `{{current}} / ${totalSteps}`,
       allowClose: true,
+      // When there are cross-page steps after, override "Done" to "Next →"
+      doneBtnText: hasMoreAfter ? 'Next →' : 'Done',
       steps,
       onHighlightStarted: (_el, _step, opts) => {
         const relativeIndex = opts.state.activeIndex ?? 0
@@ -469,8 +471,17 @@ export class OnTheWay {
           return
         }
 
-        const isLastPage = !hasMoreAfter
         const noMoreSteps = !this.driverInstance?.hasNextStep()
+
+        // If this is the last step on this page but there are more on other pages,
+        // treat "Done" click as cross-page navigation (Driver.js shows "Done" 
+        // when it has no more steps, but we know there are more on another page)
+        if (noMoreSteps && hasMoreAfter) {
+          navigateCrossPage(fromIndex + samePageCount)
+          return
+        }
+
+        const isLastPage = !hasMoreAfter
 
         if (isLastPage && noMoreSteps) {
           // Completed all steps across all pages
