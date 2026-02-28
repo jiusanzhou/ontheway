@@ -660,6 +660,181 @@ export class OnTheWay {
     }
   }
 
+  // ---- DOM Extraction for AI ----
+
+  /**
+   * Extract a simplified DOM representation of the current page,
+   * optimized for AI consumption. Marks interactive elements and
+   * includes position information.
+   * @internal
+   */
+  private extractDOM(): string {
+    if (typeof document === 'undefined') return ''
+
+    const INTERACTIVE_TAGS = new Set(['button', 'a', 'input', 'select', 'textarea', 'details', 'summary'])
+    const INTERACTIVE_ROLES = new Set(['button', 'link', 'tab', 'menuitem', 'checkbox', 'radio', 'switch', 'combobox', 'textbox', 'slider'])
+    const SKIP_TAGS = new Set(['script', 'style', 'noscript', 'svg', 'path', 'link', 'meta', 'head'])
+    const MAX_TEXT_LEN = 60
+    const MAX_OUTPUT_SIZE = 12000 // chars
+    let outputSize = 0
+
+    const viewportHeight = window.innerHeight
+    const viewportWidth = window.innerWidth
+
+    const walk = (el: Element, depth: number): string => {
+      if (depth > 8 || outputSize > MAX_OUTPUT_SIZE) return ''
+      const tag = el.tagName.toLowerCase()
+      if (SKIP_TAGS.has(tag)) return ''
+      if (el.id?.startsWith('otw-')) return ''
+
+      // Skip hidden elements (but not body/html)
+      const htmlEl = el as HTMLElement
+      if (tag !== 'body' && tag !== 'html') {
+        if (htmlEl.offsetParent === null && htmlEl.style?.display !== 'contents' &&
+            !htmlEl.closest('details')) return ''
+        const style = htmlEl.style
+        if (style?.display === 'none' || style?.visibility === 'hidden') return ''
+      }
+
+      const isInteractive = INTERACTIVE_TAGS.has(tag) ||
+        INTERACTIVE_ROLES.has(el.getAttribute('role') || '') ||
+        el.hasAttribute('onclick') ||
+        el.hasAttribute('tabindex') ||
+        (el as HTMLElement).contentEditable === 'true'
+
+      // Build attributes
+      const attrs: string[] = []
+      const ds = (el as HTMLElement).dataset
+      if (ds?.onthewayId) attrs.push(`data-ontheway-id="${ds.onthewayId}"`)
+      if (el.id && !/^[\d:r]/.test(el.id)) attrs.push(`id="${el.id}"`)
+      const ariaLabel = el.getAttribute('aria-label')
+      if (ariaLabel) attrs.push(`aria-label="${ariaLabel.substring(0, 50)}"`)
+      const role = el.getAttribute('role')
+      if (role) attrs.push(`role="${role}"`)
+
+      // For interactive elements, include more attrs
+      if (isInteractive) {
+        if ((el as HTMLInputElement).type && tag === 'input') attrs.push(`type="${(el as HTMLInputElement).type}"`)
+        if ((el as HTMLInputElement).name) attrs.push(`name="${(el as HTMLInputElement).name}"`)
+        if ((el as HTMLInputElement).placeholder) attrs.push(`placeholder="${(el as HTMLInputElement).placeholder}"`)
+        if (tag === 'a') attrs.push(`href="..."`)
+        if (el.hasAttribute('disabled')) attrs.push('disabled')
+      }
+
+      // For non-interactive elements at depth > 3, skip if they have no interesting attributes
+      if (!isInteractive && depth > 3 && attrs.length === 0) {
+        // Just recurse children without wrapping in a tag
+        const childResult = Array.from(el.children)
+          .map(c => walk(c, depth))
+          .filter(Boolean)
+          .join('\n')
+        return childResult
+      }
+
+      const indent = '  '.repeat(depth)
+      const attrStr = attrs.length ? ' ' + attrs.join(' ') : ''
+
+      // Position annotation
+      let posAnnotation = ''
+      if (isInteractive && tag !== 'body' && tag !== 'html') {
+        try {
+          const rect = el.getBoundingClientRect()
+          if (rect.width > 0 && rect.height > 0) {
+            const inViewport = rect.top < viewportHeight && rect.bottom > 0 &&
+              rect.left < viewportWidth && rect.right > 0
+            if (!inViewport) posAnnotation = ' [OUT OF VIEWPORT]'
+          }
+        } catch {}
+      }
+
+      const interactiveTag = isInteractive ? ' [INTERACTIVE]' : ''
+
+      // Leaf text
+      const text = Array.from(el.childNodes)
+        .filter(n => n.nodeType === 3)
+        .map(n => n.textContent?.trim())
+        .filter(Boolean)
+        .join(' ')
+        .substring(0, MAX_TEXT_LEN)
+
+      const children = Array.from(el.children)
+        .map(c => walk(c, depth + 1))
+        .filter(Boolean)
+        .join('\n')
+
+      if (!children && !text && !isInteractive &&
+          !['input', 'button', 'img', 'video', 'iframe', 'main', 'header', 'footer', 'nav', 'aside', 'section'].includes(tag)) {
+        return ''
+      }
+
+      let line: string
+      if (!children) {
+        line = `${indent}<${tag}${attrStr}>${text ? ' ' + text + ' ' : ''}${interactiveTag}${posAnnotation}</${tag}>`
+      } else {
+        line = `${indent}<${tag}${attrStr}>${text ? ' ' + text : ''}${interactiveTag}${posAnnotation}\n${children}\n${indent}</${tag}>`
+      }
+
+      outputSize += line.length
+      return line
+    }
+
+    return walk(document.body, 0)
+  }
+
+  // ---- AI Step Generation ----
+
+  /**
+   * Generate onboarding steps using AI based on a user intent.
+   * Calls the AI generate API endpoint and returns steps matching StepConfig format.
+   *
+   * @param intent - Natural language description of what the tour should cover
+   * @param options - Optional overrides for url, dom, and model
+   * @returns Array of StepConfig objects ready to use with start()
+   *
+   * @example
+   * ```ts
+   * const steps = await otw.generateSteps('Guide user through first project setup')
+   * ```
+   */
+  public async generateSteps(intent: string, options?: {
+    url?: string
+    dom?: string
+    model?: string
+  }): Promise<StepConfig[]> {
+    const dom = options?.dom || this.extractDOM()
+    const url = options?.url || (typeof window !== 'undefined' ? window.location.href : '')
+
+    const res = await fetch(`${this.config.apiUrl}/ai/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        intent,
+        dom,
+        url,
+        model: options?.model,
+      }),
+    })
+
+    if (!res.ok) {
+      throw new Error(`AI generation failed: ${res.status} ${res.statusText}`)
+    }
+
+    const data = await res.json()
+    return (data.steps || []).map((s: Record<string, unknown>) => {
+      const popover = s.popover as Record<string, unknown> | undefined
+      return {
+        element: (s.element as string) || '',
+        popover: {
+          title: (popover?.title as string) || '',
+          description: (popover?.description as string) || '',
+          side: (popover?.side as StepConfig['popover']['side']) || undefined,
+        },
+        url: (s.url as string) || undefined,
+        advanceOnClick: s.advanceOnClick as boolean | undefined,
+      } satisfies StepConfig
+    })
+  }
+
   /**
    * Get the project ID this SDK instance was configured with.
    */

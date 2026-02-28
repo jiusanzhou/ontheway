@@ -38,6 +38,7 @@ interface RecordedStep {
   position: 'auto' | 'top' | 'bottom' | 'left' | 'right'
   spotlight: boolean
   url: string
+  advanceOnClick: boolean
 }
 
 interface Task {
@@ -93,6 +94,114 @@ function genSelector(el: Element): string {
   return 'body > ' + parts.join(' > ')
 }
 
+// ---- DOM extraction for AI ----
+
+function extractDOM(): string {
+  if (typeof document === 'undefined') return ''
+
+  const INTERACTIVE_TAGS = new Set(['button', 'a', 'input', 'select', 'textarea', 'details', 'summary'])
+  const INTERACTIVE_ROLES = new Set(['button', 'link', 'tab', 'menuitem', 'checkbox', 'radio', 'switch', 'combobox', 'textbox', 'slider'])
+  const SKIP_TAGS = new Set(['script', 'style', 'noscript', 'svg', 'path', 'link', 'meta', 'head'])
+  const MAX_TEXT_LEN = 60
+  const MAX_OUTPUT_SIZE = 12000
+  let outputSize = 0
+
+  const viewportHeight = window.innerHeight
+  const viewportWidth = window.innerWidth
+
+  const walk = (el: Element, depth: number): string => {
+    if (depth > 8 || outputSize > MAX_OUTPUT_SIZE) return ''
+    const tag = el.tagName.toLowerCase()
+    if (SKIP_TAGS.has(tag)) return ''
+    if (el.id?.startsWith('otw-')) return ''
+
+    const htmlEl = el as HTMLElement
+    if (tag !== 'body' && tag !== 'html') {
+      if (htmlEl.offsetParent === null && htmlEl.style?.display !== 'contents' &&
+          !htmlEl.closest('details')) return ''
+      const style = htmlEl.style
+      if (style?.display === 'none' || style?.visibility === 'hidden') return ''
+    }
+
+    const isInteractive = INTERACTIVE_TAGS.has(tag) ||
+      INTERACTIVE_ROLES.has(el.getAttribute('role') || '') ||
+      el.hasAttribute('onclick') ||
+      el.hasAttribute('tabindex') ||
+      (el as HTMLElement).contentEditable === 'true'
+
+    const attrs: string[] = []
+    const ds = (el as HTMLElement).dataset
+    if (ds?.onthewayId) attrs.push(`data-ontheway-id="${ds.onthewayId}"`)
+    if (el.id && !/^[\d:r]/.test(el.id)) attrs.push(`id="${el.id}"`)
+    const ariaLabel = el.getAttribute('aria-label')
+    if (ariaLabel) attrs.push(`aria-label="${ariaLabel.substring(0, 50)}"`)
+    const role = el.getAttribute('role')
+    if (role) attrs.push(`role="${role}"`)
+
+    if (isInteractive) {
+      if ((el as HTMLInputElement).type && tag === 'input') attrs.push(`type="${(el as HTMLInputElement).type}"`)
+      if ((el as HTMLInputElement).name) attrs.push(`name="${(el as HTMLInputElement).name}"`)
+      if ((el as HTMLInputElement).placeholder) attrs.push(`placeholder="${(el as HTMLInputElement).placeholder}"`)
+      if (tag === 'a') attrs.push(`href="..."`)
+      if (el.hasAttribute('disabled')) attrs.push('disabled')
+    }
+
+    if (!isInteractive && depth > 3 && attrs.length === 0) {
+      const childResult = Array.from(el.children)
+        .map(c => walk(c, depth))
+        .filter(Boolean)
+        .join('\n')
+      return childResult
+    }
+
+    const indent = '  '.repeat(depth)
+    const attrStr = attrs.length ? ' ' + attrs.join(' ') : ''
+
+    let posAnnotation = ''
+    if (isInteractive && tag !== 'body' && tag !== 'html') {
+      try {
+        const rect = el.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0) {
+          const inViewport = rect.top < viewportHeight && rect.bottom > 0 &&
+            rect.left < viewportWidth && rect.right > 0
+          if (!inViewport) posAnnotation = ' [OUT OF VIEWPORT]'
+        }
+      } catch {}
+    }
+
+    const interactiveTag = isInteractive ? ' [INTERACTIVE]' : ''
+
+    const text = Array.from(el.childNodes)
+      .filter(n => n.nodeType === 3)
+      .map(n => n.textContent?.trim())
+      .filter(Boolean)
+      .join(' ')
+      .substring(0, MAX_TEXT_LEN)
+
+    const children = Array.from(el.children)
+      .map(c => walk(c, depth + 1))
+      .filter(Boolean)
+      .join('\n')
+
+    if (!children && !text && !isInteractive &&
+        !['input', 'button', 'img', 'video', 'iframe', 'main', 'header', 'footer', 'nav', 'aside', 'section'].includes(tag)) {
+      return ''
+    }
+
+    let line: string
+    if (!children) {
+      line = `${indent}<${tag}${attrStr}>${text ? ' ' + text + ' ' : ''}${interactiveTag}${posAnnotation}</${tag}>`
+    } else {
+      line = `${indent}<${tag}${attrStr}>${text ? ' ' + text : ''}${interactiveTag}${posAnnotation}\n${children}\n${indent}</${tag}>`
+    }
+
+    outputSize += line.length
+    return line
+  }
+
+  return walk(document.body, 0)
+}
+
 // ---- React DevTools Panel ----
 
 interface DevToolsPanelProps {
@@ -118,6 +227,10 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
   // AI generation
   const [aiIntent, setAiIntent] = useState('')
   const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiAppendMode, setAiAppendMode] = useState(true)
+
+  // Preview
+  const [previewing, setPreviewing] = useState(false)
 
   // Tasks list
   const [tasks, setTasks] = useState<Task[]>([])
@@ -189,18 +302,22 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
     e.preventDefault()
     e.stopPropagation()
 
-    const r = el.getBoundingClientRect()
+    const tag = el.tagName.toLowerCase()
+    const isInteractive = ['button', 'a', 'input', 'select', 'textarea'].includes(tag) ||
+      el.getAttribute('role') === 'button'
+
     const text = (el as HTMLElement).innerText?.trim().substring(0, 60) || ''
     const step: RecordedStep = {
       id: 'step_' + Date.now(),
       selector: genSelector(el),
-      tagName: el.tagName.toLowerCase(),
+      tagName: tag,
       innerText: text,
       title: `Step ${steps.length + 1}`,
       description: 'Click here to continue',
       position: 'auto',
       spotlight: true,
       url: location.href,
+      advanceOnClick: isInteractive,
     }
     setSteps(prev => [...prev, step])
     setEditingStep(step.id)
@@ -270,63 +387,10 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
     })
   }
 
-  // ---- DOM extraction for AI ----
-  const extractDOM = useCallback(() => {
-    const walk = (el: Element, depth: number): string => {
-      if (depth > 6) return ''
-      const tag = el.tagName.toLowerCase()
-      // Skip our devtools, scripts, styles, hidden elements
-      if (['script', 'style', 'noscript', 'svg', 'path'].includes(tag)) return ''
-      if (el.id?.startsWith('otw-')) return ''
-      if ((el as HTMLElement).offsetParent === null && tag !== 'body' && tag !== 'html') return ''
-
-      const attrs: string[] = []
-      if (el.id) attrs.push(`id="${el.id}"`)
-      if (el.className && typeof el.className === 'string') {
-        const cls = el.className.split(/\s+/).filter(c =>
-          !/^(w-|h-|p-|m-|text-|bg-|flex|grid|border|rounded|shadow|transition|transform|hover:|focus:|sm:|md:|lg:|xl:|2xl:)/.test(c)
-        ).slice(0, 3).join(' ')
-        if (cls) attrs.push(`class="${cls}"`)
-      }
-      if ((el as HTMLInputElement).type) attrs.push(`type="${(el as HTMLInputElement).type}"`)
-      if ((el as HTMLInputElement).name) attrs.push(`name="${(el as HTMLInputElement).name}"`)
-      if ((el as HTMLInputElement).placeholder) attrs.push(`placeholder="${(el as HTMLInputElement).placeholder}"`)
-      if ((el as HTMLAnchorElement).href && tag === 'a') attrs.push(`href="..."`)
-      const ds = (el as HTMLElement).dataset
-      if (ds?.onthewayId) attrs.push(`data-ontheway-id="${ds.onthewayId}"`)
-
-      const indent = '  '.repeat(depth)
-      const attrStr = attrs.length ? ' ' + attrs.join(' ') : ''
-
-      // Leaf text
-      const text = Array.from(el.childNodes)
-        .filter(n => n.nodeType === 3)
-        .map(n => n.textContent?.trim())
-        .filter(Boolean)
-        .join(' ')
-        .substring(0, 60)
-
-      const children = Array.from(el.children)
-        .map(c => walk(c, depth + 1))
-        .filter(Boolean)
-        .join('\n')
-
-      if (!children && !text && !['input', 'button', 'img', 'video', 'iframe'].includes(tag)) {
-        return ''
-      }
-
-      if (!children) {
-        return `${indent}<${tag}${attrStr}>${text ? ' ' + text + ' ' : ''}</${tag}>`
-      }
-      return `${indent}<${tag}${attrStr}>${text ? ' ' + text : ''}\n${children}\n${indent}</${tag}>`
-    }
-
-    return walk(document.body, 0)
-  }, [])
-
   // ---- AI Generate ----
-  const aiGenerate = useCallback(async () => {
-    if (!aiIntent.trim()) {
+  const aiGenerate = useCallback(async (intent?: string) => {
+    const effectiveIntent = intent || aiIntent.trim()
+    if (!effectiveIntent) {
       setSaveMsg('❌ Describe what the tour should do')
       return
     }
@@ -339,7 +403,7 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          intent: aiIntent,
+          intent: effectiveIntent,
           dom,
           url: location.href,
           taskName: taskName || undefined,
@@ -349,32 +413,84 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
       const data = await res.json()
 
       if (data.steps && data.steps.length > 0) {
-        const newSteps: RecordedStep[] = data.steps.map((s: Record<string, unknown>, i: number) => ({
-          id: 'ai_' + Date.now() + '_' + i,
-          selector: (s.selector as string) || '',
-          tagName: '',
-          innerText: '',
-          title: (s.title as string) || `Step ${i + 1}`,
-          description: (s.content as string) || (s.description as string) || '',
-          position: (s.position as RecordedStep['position']) || 'auto',
-          spotlight: s.spotlight !== false,
-          url: location.href,
-        }))
+        const newSteps: RecordedStep[] = data.steps.map((s: Record<string, unknown>, i: number) => {
+          const popover = s.popover as Record<string, unknown> | undefined
+          return {
+            id: 'ai_' + Date.now() + '_' + i,
+            selector: (s.element as string) || (s.selector as string) || '',
+            tagName: '',
+            innerText: '',
+            title: (popover?.title as string) || (s.title as string) || `Step ${i + 1}`,
+            description: (popover?.description as string) || (s.content as string) || (s.description as string) || '',
+            position: (popover?.side as RecordedStep['position']) || (s.position as RecordedStep['position']) || 'auto',
+            spotlight: true,
+            url: (s.url as string) || location.href,
+            advanceOnClick: s.advanceOnClick !== undefined ? !!s.advanceOnClick : false,
+          }
+        })
 
-        setSteps(prev => [...prev, ...newSteps])
+        if (aiAppendMode) {
+          setSteps(prev => [...prev, ...newSteps])
+        } else {
+          setSteps(newSteps)
+        }
         if (!taskName && data.taskName) {
           setTaskName(data.taskName)
         }
+        if (!taskSlug && data.slug) {
+          setTaskSlug(data.slug)
+        }
         setEditingStep(newSteps[0].id)
-        setSaveMsg(`✨ ${newSteps.length} steps generated (${data.source})`)
+        const appendText = aiAppendMode && steps.length > 0 ? ' (appended)' : ''
+        setSaveMsg(`✨ ${newSteps.length} steps generated (${data.source})${appendText}`)
       } else {
-        setSaveMsg('❌ No steps generated')
+        setSaveMsg('❌ No steps generated' + (data.warning ? ': ' + data.warning : ''))
       }
     } catch {
       setSaveMsg('❌ AI generation failed')
     }
     setAiGenerating(false)
-  }, [aiIntent, baseUrl, extractDOM, taskName])
+  }, [aiIntent, baseUrl, taskName, taskSlug, aiAppendMode, steps.length])
+
+  // ---- Analyze Page (no intent needed) ----
+  const analyzePage = useCallback(() => {
+    aiGenerate('Analyze this page and suggest onboarding steps for the most important interactive elements and user flows')
+  }, [aiGenerate])
+
+  // ---- Preview Steps with Driver.js ----
+  const previewSteps = useCallback(async () => {
+    if (steps.length === 0) return
+    setPreviewing(true)
+
+    try {
+      // Dynamically import driver.js (it's already a peer dep)
+      const { driver } = await import('driver.js')
+
+      const driverSteps = steps.map(s => ({
+        element: s.selector,
+        popover: {
+          title: s.title,
+          description: s.description,
+          side: s.position === 'auto' ? undefined : s.position as 'top' | 'bottom' | 'left' | 'right',
+        },
+      }))
+
+      const d = driver({
+        showProgress: true,
+        allowClose: true,
+        steps: driverSteps,
+        onDestroyed: () => {
+          setPreviewing(false)
+        },
+      })
+
+      d.drive()
+    } catch (err) {
+      console.error('[DevTools] Preview failed:', err)
+      setSaveMsg('❌ Preview failed — is driver.js available?')
+      setPreviewing(false)
+    }
+  }, [steps])
 
   // ---- Save task ----
   const saveTask = async () => {
@@ -393,11 +509,13 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
           slug: taskSlug,
           trigger,
           steps: steps.map(s => ({
-            selector: s.selector,
-            title: s.title,
-            content: s.description,
-            position: s.position,
-            spotlight: s.spotlight,
+            element: s.selector,
+            popover: {
+              title: s.title,
+              description: s.description,
+              side: s.position === 'auto' ? undefined : s.position,
+            },
+            advanceOnClick: s.advanceOnClick || undefined,
           })),
         }),
       })
@@ -502,6 +620,16 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
       fontWeight: 600,
       cursor: disabled ? 'not-allowed' : 'pointer',
     }),
+    btnSmall: (color: string, disabled = false) => ({
+      padding: '4px 10px',
+      border: 'none',
+      borderRadius: 5,
+      background: disabled ? '#d1d5db' : color,
+      color: '#fff',
+      fontSize: 11,
+      fontWeight: 500,
+      cursor: disabled ? 'not-allowed' : 'pointer',
+    }),
     btnOutline: {
       padding: '6px 14px',
       border: '1px solid #d1d5db',
@@ -547,6 +675,14 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
       animation: 'otw-blink 1s ease-in-out infinite',
       display: 'inline-block',
       marginRight: 6,
+    },
+    toggleRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 6,
+      fontSize: 11,
+      color: '#6b7280',
     },
   }
 
@@ -633,7 +769,7 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
               </div>
 
               {/* Recording controls */}
-              <div style={{ ...S.section, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ ...S.section, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 {!recording ? (
                   <button style={S.btn('#22c55e')} onClick={startRecording}>
                     ⏺ Record
@@ -645,6 +781,14 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
                 )}
                 <button style={S.btn('#111', saving || steps.length === 0 || !taskName)} onClick={saveTask} disabled={saving || steps.length === 0 || !taskName}>
                   {saving ? '...' : '💾 Save'}
+                </button>
+                <button
+                  style={S.btn('#3b82f6', previewing || steps.length === 0)}
+                  onClick={previewSteps}
+                  disabled={previewing || steps.length === 0}
+                  title="Preview steps with Driver.js"
+                >
+                  {previewing ? '...' : '▶ Preview'}
                 </button>
               </div>
 
@@ -661,21 +805,49 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
                   />
                   <button
                     style={S.btn('#7c3aed', aiGenerating || !aiIntent.trim())}
-                    onClick={aiGenerate}
+                    onClick={() => aiGenerate()}
                     disabled={aiGenerating || !aiIntent.trim()}
                   >
                     {aiGenerating ? '...' : '✨'}
                   </button>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
+                  <button
+                    style={S.btnSmall('#6366f1', aiGenerating)}
+                    onClick={analyzePage}
+                    disabled={aiGenerating}
+                    title="Analyze current page structure and suggest onboarding steps automatically"
+                  >
+                    {aiGenerating ? '...' : '🔍 Analyze Page'}
+                  </button>
+                  <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: '#6b7280', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={aiAppendMode}
+                      onChange={e => setAiAppendMode(e.target.checked)}
+                    />
+                    Append to existing
+                  </label>
                 </div>
                 {saveMsg && <div style={{ fontSize: 11, marginTop: 4, color: saveMsg.startsWith('✅') || saveMsg.startsWith('✨') ? '#16a34a' : saveMsg.startsWith('❌') ? '#dc2626' : '#6b7280' }}>{saveMsg}</div>}
               </div>
 
               {/* Steps */}
               <div style={S.section}>
-                <label style={{ ...S.label, marginBottom: 6 }}>Steps ({steps.length})</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <label style={{ ...S.label, marginBottom: 0 }}>Steps ({steps.length})</label>
+                  {steps.length > 0 && (
+                    <button
+                      style={{ ...S.btnOutline, padding: '2px 8px', fontSize: 10, color: '#ef4444' }}
+                      onClick={() => { setSteps([]); setEditingStep(null) }}
+                    >
+                      Clear All
+                    </button>
+                  )}
+                </div>
                 {steps.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '16px 0', color: '#9ca3af', fontSize: 12 }}>
-                    {recording ? 'Click elements on the page to capture steps' : 'Click Record to start'}
+                    {recording ? 'Click elements on the page to capture steps' : 'Click Record or use AI Generate to add steps'}
                   </div>
                 ) : (
                   steps.map((step, i) => (
@@ -733,11 +905,16 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
                                 <option value="right">Right</option>
                               </select>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'end', paddingBottom: 2 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'end', gap: 4, paddingBottom: 2 }}>
                               <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
                                 <input type="checkbox" checked={step.spotlight}
                                   onChange={e => updateStep(step.id, { spotlight: e.target.checked })} />
                                 Spotlight
+                              </label>
+                              <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <input type="checkbox" checked={step.advanceOnClick}
+                                  onChange={e => updateStep(step.id, { advanceOnClick: e.target.checked })} />
+                                Advance on click
                               </label>
                             </div>
                           </div>
