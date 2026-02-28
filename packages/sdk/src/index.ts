@@ -57,6 +57,8 @@ export interface OnTheWayConfig {
   tasks?: TaskConfig[]
   onComplete?: (taskId: string) => void
   onSkip?: (taskId: string, stepIndex: number) => void
+  /** @internal When true, cross-page resume is handled externally (e.g. React provider) */
+  _externalResume?: boolean
 }
 
 /** A single task returned by the server or configured locally */
@@ -158,10 +160,15 @@ export class OnTheWay {
 
     this.state.loaded = true
 
-    // Check for cross-page tour resume before auto-start
-    if (!this.resumeCrossPageTour()) {
-      // Auto-start tasks if configured
-      this.handleAutoStart()
+    // Cross-page resume is now handled externally (React provider calls
+    // attemptCrossPageResume after component mount + delay).
+    // For non-React usage, schedule it with a generous delay.
+    if (!this.config._externalResume) {
+      setTimeout(() => {
+        if (!this.resumeCrossPageTour()) {
+          this.handleAutoStart()
+        }
+      }, 1000)
     }
   }
 
@@ -203,7 +210,10 @@ export class OnTheWay {
     }
   }
 
-  private handleAutoStart() {
+  /**
+   * Auto-start tasks if configured. Public so React provider can call it.
+   */
+  public handleAutoStart() {
     if (typeof window === 'undefined') return
     const currentUrl = window.location.href
 
@@ -269,9 +279,8 @@ export class OnTheWay {
   /**
    * Attempt to resume a cross-page tour from sessionStorage.
    * @returns `true` if a tour was resumed, `false` otherwise.
-   * @internal
    */
-  private resumeCrossPageTour(): boolean {
+  public resumeCrossPageTour(): boolean {
     if (typeof sessionStorage === 'undefined') return false
     const raw = sessionStorage.getItem(CROSS_PAGE_KEY)
     if (!raw) return false

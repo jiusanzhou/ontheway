@@ -94,15 +94,24 @@ export function OnTheWayProvider({
       tasks,
       onComplete,
       onSkip,
+      _externalResume: true,
     })
 
     setOtw(instance)
 
-    // Poll until ready (cross-page resume happens inside init)
+    // Poll until ready, then attempt cross-page resume with delay
     const check = setInterval(() => {
       if (instance.isReady()) {
         setReady(true)
         clearInterval(check)
+
+        // Delay cross-page resume to let React finish rendering
+        // This ensures target elements are in the DOM
+        setTimeout(() => {
+          if (!instance.resumeCrossPageTour()) {
+            instance.handleAutoStart()
+          }
+        }, 500)
       }
     }, 100)
 
