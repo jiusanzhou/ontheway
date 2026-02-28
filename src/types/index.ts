@@ -15,7 +15,7 @@ export interface Task {
   project_id: string
   name: string
   slug: string
-  trigger: 'auto' | 'manual' | 'first-visit'
+  trigger: 'auto' | 'manual' | 'first-visit' | 'condition'
   steps: Step[]
   targeting: Targeting
   enabled: boolean
@@ -33,6 +33,8 @@ export interface Step {
   position: 'top' | 'bottom' | 'left' | 'right' | 'auto'
   action: 'click' | 'next' | 'input'
   spotlight: boolean
+  /** Optional URL for cross-page tours. When set, the SDK navigates here before showing this step. */
+  url?: string
   // Driver.js specific options
   popover_class?: string
   highlight_class?: string
@@ -42,6 +44,8 @@ export interface Targeting {
   new_users_only?: boolean
   url_pattern?: string
   user_segment?: string
+  /** Condition callback for conditional triggers (SDK-side only) */
+  condition?: () => boolean
 }
 
 // 录制器捕获的原始数据

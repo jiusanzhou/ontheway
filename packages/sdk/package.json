@@ -1,0 +1,93 @@
+{
+  "name": "ontheway-sdk",
+  "version": "0.1.0",
+  "description": "Lightweight onboarding SDK based on Driver.js",
+  "license": "MIT",
+  "sideEffects": false,
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./react": {
+      "import": {
+        "types": "./dist/react.d.ts",
+        "default": "./dist/react.js"
+      },
+      "require": {
+        "types": "./dist/react.d.cts",
+        "default": "./dist/react.cjs"
+      }
+    },
+    "./components": {
+      "import": {
+        "types": "./dist/components.d.ts",
+        "default": "./dist/components.js"
+      },
+      "require": {
+        "types": "./dist/components.d.cts",
+        "default": "./dist/components.cjs"
+      }
+    },
+    "./checklist": {
+      "import": {
+        "types": "./dist/checklist.d.ts",
+        "default": "./dist/checklist.js"
+      },
+      "require": {
+        "types": "./dist/checklist.d.cts",
+        "default": "./dist/checklist.cjs"
+      }
+    },
+    "./devtools": {
+      "import": {
+        "types": "./dist/devtools.d.ts",
+        "default": "./dist/devtools.js"
+      },
+      "require": {
+        "types": "./dist/devtools.d.cts",
+        "default": "./dist/devtools.cjs"
+      }
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "driver.js": "^1.3.0",
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "driver.js": "^1.3.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0"
+  }
+}

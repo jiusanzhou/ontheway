@@ -17,7 +17,7 @@ interface TaskData {
   project_id: string
   name: string
   slug: string
-  trigger: 'auto' | 'manual' | 'first-visit'
+  trigger: 'auto' | 'manual' | 'first-visit' | 'condition'
   enabled: boolean
   steps: Step[]
 }
