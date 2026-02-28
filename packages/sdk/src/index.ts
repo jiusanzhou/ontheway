@@ -372,6 +372,11 @@ export class OnTheWay {
                     window.location.href = nextStep.url
                     return
                   }
+                  // Wait for next element to appear before moving
+                  this.waitForElement(nextStep.element, 3000).then(() => {
+                    this.driverInstance?.moveNext()
+                  })
+                  return
                 }
                 this.driverInstance.moveNext()
               } else {
@@ -394,6 +399,7 @@ export class OnTheWay {
       },
       onNextClick: () => {
         if (!this.driverInstance) return
+        cleanupClickListeners()
         const relativeIndex = this.driverInstance.getActiveIndex() ?? 0
         const absoluteIndex = fromIndex + relativeIndex + 1
 
@@ -406,9 +412,15 @@ export class OnTheWay {
             window.location.href = nextStep.url
             return
           }
-        }
 
-        this.driverInstance.moveNext()
+          // Wait for the next step's element to appear in DOM
+          // (handles cases where element is inside a dialog/modal not yet open)
+          this.waitForElement(nextStep.element, 3000).then(() => {
+            this.driverInstance?.moveNext()
+          })
+        } else {
+          this.driverInstance.moveNext()
+        }
       },
       onDestroyStarted: () => {
         if (this.driverInstance?.hasNextStep()) {
@@ -432,6 +444,43 @@ export class OnTheWay {
     })
 
     this.driverInstance.drive()
+  }
+
+  /**
+   * Wait for a DOM element to appear, with timeout.
+   * Resolves immediately if element exists, otherwise polls via MutationObserver.
+   * @internal
+   */
+  private waitForElement(selector: string, timeoutMs: number = 3000): Promise<Element | null> {
+    return new Promise((resolve) => {
+      const el = document.querySelector(selector)
+      if (el) {
+        resolve(el)
+        return
+      }
+
+      let resolved = false
+      const observer = new MutationObserver(() => {
+        const found = document.querySelector(selector)
+        if (found && !resolved) {
+          resolved = true
+          observer.disconnect()
+          // Small delay to let layout settle
+          setTimeout(() => resolve(found), 50)
+        }
+      })
+
+      observer.observe(document.body, { childList: true, subtree: true })
+
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true
+          observer.disconnect()
+          // Try one last time
+          resolve(document.querySelector(selector))
+        }
+      }, timeoutMs)
+    })
   }
 
   /**
