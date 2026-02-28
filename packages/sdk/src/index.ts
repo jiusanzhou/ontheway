@@ -88,9 +88,15 @@ export interface StepConfig {
   /**
    * Optional URL this step should be shown on.
    * If the current page does not match, the SDK will navigate to it and
-   * resume the tour aftehe page loads.
+   * resume the tour after the page loads.
    */
   url?: string
+  /**
+   * When true, clicking the highlighted element itself will advance to
+   * the next step (or complete the tour if it's the last step).
+   * Default: true
+   */
+  advanceOnClick?: boolean
 }
 
 /** @internal Runtime state of the SDK */
@@ -334,9 +340,58 @@ export class OnTheWay {
 
     const totalSteps = allSteps.length
 
+    // Track element click listeners for cleanup
+    const clickCleanups: (() => void)[] = []
+
+    const cleanupClickListeners = () => {
+      clickCleanups.forEach(fn => fn())
+      clickCleanups.length = 0
+    }
+
+    const setupClickListener = (relativeIndex: number) => {
+      cleanupClickListeners()
+      const absoluteIndex = fromIndex + relativeIndex
+      const stepConfig = allSteps[absoluteIndex]
+      // advanceOnClick defaults to true
+      if (stepConfig && stepConfig.advanceOnClick !== false) {
+        const el = document.querySelector(stepConfig.element)
+        if (el) {
+          const handler = () => {
+            if (!this.driverInstance) return
+            // Small delay to let the click's native action proceed first
+            setTimeout(() => {
+              if (!this.driverInstance) return
+              if (this.driverInstance.hasNextStep()) {
+                const nextAbsolute = absoluteIndex + 1
+                if (nextAbsolute < allSteps.length) {
+                  const nextStep = allSteps[nextAbsolute]
+                  if (nextStep.url && !this.stepUrlMatches(nextStep.url)) {
+                    this.saveCrossPageState(task.slug, nextAbsolute)
+                    cleanupClickListeners()
+                    this.driverInstance.destroy()
+                    window.location.href = nextStep.url
+                    return
+                  }
+                }
+                this.driverInstance.moveNext()
+              } else {
+                this.driverInstance.destroy()
+              }
+            }, 100)
+          }
+          el.addEventListener('click', handler, { once: true })
+          clickCleanups.push(() => el.removeEventListener('click', handler))
+        }
+      }
+    }
+
     this.driverInstance = driver({
       showProgress: true,
       steps,
+      onHighlightStarted: (_el, _step, opts) => {
+        const relativeIndex = opts.state.activeIndex ?? 0
+        setupClickListener(relativeIndex)
+      },
       onNextClick: () => {
         if (!this.driverInstance) return
         const relativeIndex = this.driverInstance.getActiveIndex() ?? 0
@@ -363,12 +418,14 @@ export class OnTheWay {
           this.config.onSkip?.(task.id, currentIndex)
           this.trackCompletion(task.id, currentIndex, totalSteps, false)
           this.clearCrossPageState()
+          cleanupClickListeners()
         } else {
           // Completed
           this.saveCompletedTask(task.id)
           this.config.onComplete?.(task.id)
           this.trackCompletion(task.id, totalSteps, totalSteps, true)
           this.clearCrossPageState()
+          cleanupClickListeners()
         }
         this.driverInstance?.destroy()
       },
