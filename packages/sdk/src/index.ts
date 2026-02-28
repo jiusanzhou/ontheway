@@ -412,10 +412,17 @@ export class OnTheWay {
 
     this.driverInstance = driver({
       showProgress: true,
+      progressText: `{{current}} / ${totalSteps}`,
       allowClose: true,
       steps,
       onHighlightStarted: (_el, _step, opts) => {
         const relativeIndex = opts.state.activeIndex ?? 0
+        // Update progress text to show absolute position
+        const absolutePos = fromIndex + relativeIndex + 1
+        const popoverEl = document.querySelector('.driver-popover-progress-text')
+        if (popoverEl) {
+          popoverEl.textContent = `${absolutePos} / ${totalSteps}`
+        }
         setupClickListener(relativeIndex)
       },
       onNextClick: (_el, _step, { driver: drv }) => {
