@@ -358,7 +358,8 @@ export class OnTheWay {
         if (el) {
           const handler = () => {
             if (!this.driverInstance) return
-            // Small delay to let the click's native action proceed first
+            cleanupClickListeners()
+            // Delay to let click's native action (navigation, dialog open) proceed
             setTimeout(() => {
               if (!this.driverInstance) return
               if (this.driverInstance.hasNextStep()) {
@@ -367,14 +368,19 @@ export class OnTheWay {
                   const nextStep = allSteps[nextAbsolute]
                   if (nextStep.url && !this.stepUrlMatches(nextStep.url)) {
                     this.saveCrossPageState(task.slug, nextAbsolute)
-                    cleanupClickListeners()
                     this.driverInstance.destroy()
                     window.location.href = nextStep.url
                     return
                   }
-                  // Wait for next element to appear before moving
-                  this.waitForElement(nextStep.element, 3000).then(() => {
-                    this.driverInstance?.moveNext()
+                  // Wait for next element, then use moveTo for reliable positioning
+                  const nextRelative = this.driverInstance.getActiveIndex()! + 1
+                  this.waitForElement(nextStep.element, 3000).then((el) => {
+                    if (!this.driverInstance || !el) return
+                    requestAnimationFrame(() => {
+                      requestAnimationFrame(() => {
+                        this.driverInstance?.moveTo(nextRelative)
+                      })
+                    })
                   })
                   return
                 }
@@ -382,7 +388,7 @@ export class OnTheWay {
               } else {
                 this.driverInstance.destroy()
               }
-            }, 100)
+            }, 150)
           }
           el.addEventListener('click', handler, { once: true })
           clickCleanups.push(() => el.removeEventListener('click', handler))
@@ -392,12 +398,13 @@ export class OnTheWay {
 
     this.driverInstance = driver({
       showProgress: true,
+      allowClose: true,
       steps,
       onHighlightStarted: (_el, _step, opts) => {
         const relativeIndex = opts.state.activeIndex ?? 0
         setupClickListener(relativeIndex)
       },
-      onNextClick: () => {
+      onNextClick: (_el, _step, { driver: drv }) => {
         if (!this.driverInstance) return
         cleanupClickListeners()
         const relativeIndex = this.driverInstance.getActiveIndex() ?? 0
@@ -413,10 +420,16 @@ export class OnTheWay {
             return
           }
 
-          // Wait for the next step's element to appear in DOM
-          // (handles cases where element is inside a dialog/modal not yet open)
-          this.waitForElement(nextStep.element, 3000).then(() => {
-            this.driverInstance?.moveNext()
+          // Destroy current highlight, wait for element, then re-highlight
+          const nextRelative = relativeIndex + 1
+          this.waitForElement(nextStep.element, 3000).then((el) => {
+            if (!this.driverInstance || !el) return
+            // Use requestAnimationFrame to ensure layout is settled
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                this.driverInstance?.moveTo(nextRelative)
+              })
+            })
           })
         } else {
           this.driverInstance.moveNext()
