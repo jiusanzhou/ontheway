@@ -352,12 +352,23 @@ export class OnTheWay {
 
     const totalSteps = allSteps.length
 
+    // Flag to suppress onDestroyStarted when navigating cross-page
+    let navigatingCrossPage = false
+
     // Track element click listeners for cleanup
     const clickCleanups: (() => void)[] = []
 
     const cleanupClickListeners = () => {
       clickCleanups.forEach(fn => fn())
       clickCleanups.length = 0
+    }
+
+    const navigateCrossPage = (nextAbsolute: number) => {
+      navigatingCrossPage = true
+      this.saveCrossPageState(task.slug, nextAbsolute)
+      cleanupClickListeners()
+      this.driverInstance?.destroy()
+      window.location.href = allSteps[nextAbsolute].url!
     }
 
     const setupClickListener = (relativeIndex: number) => {
@@ -376,11 +387,7 @@ export class OnTheWay {
               const isLastOnPage = relativeIndex >= samePageCount - 1
 
               if (isLastOnPage && hasMoreAfter) {
-                // Navigate to next page's step
-                const nextAbsolute = fromIndex + samePageCount
-                this.saveCrossPageState(task.slug, nextAbsolute)
-                this.driverInstance.destroy()
-                window.location.href = allSteps[nextAbsolute].url!
+                navigateCrossPage(fromIndex + samePageCount)
                 return
               }
 
@@ -425,7 +432,7 @@ export class OnTheWay {
         }
         setupClickListener(relativeIndex)
       },
-      onNextClick: (_el, _step, { driver: drv }) => {
+      onNextClick: () => {
         if (!this.driverInstance) return
         cleanupClickListeners()
         const relativeIndex = this.driverInstance.getActiveIndex() ?? 0
@@ -433,10 +440,7 @@ export class OnTheWay {
 
         // Last step on this page, but more steps on another page
         if (isLastOnPage && hasMoreAfter) {
-          const nextAbsolute = fromIndex + samePageCount
-          this.saveCrossPageState(task.slug, nextAbsolute)
-          this.driverInstance.destroy()
-          window.location.href = allSteps[nextAbsolute].url!
+          navigateCrossPage(fromIndex + samePageCount)
           return
         }
 
@@ -459,14 +463,22 @@ export class OnTheWay {
         })
       },
       onDestroyStarted: () => {
-        const isComplete = !this.driverInstance?.hasNextStep() && !hasMoreAfter
-        if (isComplete) {
-          // Completed all steps
+        // Skip completion logic when we're navigating cross-page
+        if (navigatingCrossPage) {
+          this.driverInstance?.destroy()
+          return
+        }
+
+        const isLastPage = !hasMoreAfter
+        const noMoreSteps = !this.driverInstance?.hasNextStep()
+
+        if (isLastPage && noMoreSteps) {
+          // Completed all steps across all pages
           this.saveCompletedTask(task.id)
           this.config.onComplete?.(task.id)
           this.trackCompletion(task.id, totalSteps, totalSteps, true)
         } else {
-          // Skipped
+          // Skipped (user closed the tour)
           const relativeIndex = this.driverInstance?.getActiveIndex() || 0
           const currentIndex = fromIndex + relativeIndex
           this.config.onSkip?.(task.id, currentIndex)
