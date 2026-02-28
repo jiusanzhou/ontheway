@@ -453,13 +453,17 @@ export class OnTheWay {
       steps,
       onHighlightStarted: (_el, _step, opts) => {
         const relativeIndex = opts.state.activeIndex ?? 0
-        // Update progress text to show absolute position
+        setupClickListener(relativeIndex)
+      },
+      onHighlighted: (_el, _step, opts) => {
+        const relativeIndex = opts.state.activeIndex ?? 0
+        // Update progress text to show absolute position (must be in onHighlighted
+        // because Driver.js renders popover content between onHighlightStarted and onHighlighted)
         const absolutePos = fromIndex + relativeIndex + 1
         const popoverEl = document.querySelector('.driver-popover-progress-text')
         if (popoverEl) {
           popoverEl.textContent = `${absolutePos} / ${totalSteps}`
         }
-        setupClickListener(relativeIndex)
       },
       onNextClick: () => {
         if (!this.driverInstance) return
