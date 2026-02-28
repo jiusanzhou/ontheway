@@ -49,6 +49,12 @@ export interface OnTheWayConfig {
   apiUrl?: string
   /** Custom Driver.js CSS URL. Set to `false` to disable auto-injection. */
   driverCssUrl?: string | false
+  /**
+   * Local tasks to use instead of fetching from server.
+   * When provided, the SDK skips the server fetch entirely.
+   * Ideal for self-contained integrations.
+   */
+  tasks?: TaskConfig[]
   onComplete?: (taskId: string) => void
   onSkip?: (taskId: string, stepIndex: number) => void
 }
@@ -137,8 +143,12 @@ export class OnTheWay {
     // Load completed tasks from localStorage
     this.loadCompletedTasks()
 
-    // Fetch task configs
-    await this.fetchTasks()
+    // Use local tasks if provided, otherwise fetch from server
+    if (this.config.tasks && this.config.tasks.length > 0) {
+      this.state.tasks = this.config.tasks
+    } else if (this.config.apiUrl) {
+      await this.fetchTasks()
+    }
 
     this.state.loaded = true
 
@@ -436,6 +446,8 @@ export class OnTheWay {
     totalSteps: number,
     completed: boolean,
   ) {
+    // Skip tracking in local mode (no apiUrl or local tasks)
+    if (!this.config.apiUrl || this.config.tasks) return
     try {
       await fetch(`${this.config.apiUrl}/sdk/track`, {
         method: 'POST',
