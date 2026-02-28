@@ -283,8 +283,26 @@ export class OnTheWay {
         this.clearCrossPageState()
         return false
       }
-      // Resume from the saved step index
-      this.startAtStep(task, state.stepIndex)
+      
+      // Wait for the target element to be in the DOM before starting
+      const targetStep = task.steps[state.stepIndex]
+      if (targetStep) {
+        this.waitForElement(targetStep.element, 5000).then((el) => {
+          if (el) {
+            // Extra delay for layout to settle after page render
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                this.startAtStep(task, state.stepIndex)
+              })
+            })
+          } else {
+            // Element didn't appear, start anyway (will show without highlight)
+            this.startAtStep(task, state.stepIndex)
+          }
+        })
+      } else {
+        this.startAtStep(task, state.stepIndex)
+      }
       return true
     } catch {
       this.clearCrossPageState()
