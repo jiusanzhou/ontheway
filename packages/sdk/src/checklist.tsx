@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useOnTheWay } from './react'
+import type { SDKTranslations } from './index'
 
 // ---- Types ----
 
@@ -25,7 +26,7 @@ export interface ChecklistTask {
 export interface OnTheWayChecklistProps {
   /** Ordered list of tasks to display */
   tasks: ChecklistTask[]
-  /** Panel title (default "Getting Started") */
+  /** Panel title. Falls back to SDK translation `checklistTitle` if not set. */
   title?: string
   /** Panel position (default "bottom-right") */
   position?: 'bottom-right' | 'bottom-left'
@@ -84,7 +85,7 @@ function saveCompletedSlugs(projectId: string, slugs: Set<string>) {
  */
 export function OnTheWayChecklist({
   tasks,
-  title = 'Getting Started',
+  title: titleProp,
   position = 'bottom-right',
   onAllComplete,
   autoHide = true,
@@ -97,8 +98,11 @@ export function OnTheWayChecklist({
   const [celebrating, setCelebrating] = useState(false)
   const allCompleteFired = useRef(false)
 
-  // Access projectId from the SDK instance
+  // Access projectId and translations from the SDK instance
   const projectId = otw?.getProjectId() ?? 'default'
+  const sdkT = otw?.getTranslations()
+  const title = titleProp ?? sdkT?.checklistTitle ?? 'Getting Started'
+  const completedText = sdkT?.checklistCompleted ?? 'All done!'
 
   // Load persisted state
   useEffect(() => {
@@ -318,7 +322,7 @@ export function OnTheWayChecklist({
               fontWeight: 500,
             }}
           >
-            🎉 All done! You&apos;re all set.
+            🎉 {completedText}
           </div>
         )}
 

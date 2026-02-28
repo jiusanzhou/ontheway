@@ -58,11 +58,12 @@ interface GenerateRequest {
   url?: string
   taskName?: string
   model?: string
+  locale?: string
 }
 
 export async function POST(request: NextRequest) {
   const body: GenerateRequest = await request.json()
-  const { intent, dom, url, taskName, model: requestModel } = body
+  const { intent, dom, url, taskName, model: requestModel, locale } = body
 
   if (!intent || !dom) {
     return NextResponse.json({ error: 'intent and dom are required' }, { status: 400 })
@@ -84,10 +85,14 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const localeInstruction = locale && locale !== 'en'
+      ? `\n\nIMPORTANT: Write all step titles and descriptions in locale "${locale}". Do NOT use English for user-facing text.`
+      : ''
+
     const userPrompt = `Page URL: ${url || 'unknown'}
 ${taskName ? `Task name: ${taskName}` : ''}
 
-User intent: "${intent}"
+User intent: "${intent}"${localeInstruction}
 
 Page DOM structure (simplified, interactive elements marked with [INTERACTIVE]):
 ${dom.substring(0, 15000)}`

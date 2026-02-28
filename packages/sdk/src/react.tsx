@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
-import { OnTheWay, type TaskConfig } from './index'
+import { OnTheWay, type TaskConfig, type SDKTranslations } from './index'
 
 // ---- Types ----
 
@@ -35,6 +35,14 @@ export interface OnTheWayContextValue {
 export interface OnTheWayProviderProps {
   projectId: string
   apiUrl?: string
+  /**
+   * Locale for SDK UI text. Default `'en'`. Built-in: `'en'`, `'zh'`.
+   */
+  locale?: string
+  /**
+   * Custom translation overrides. Merged on top of the built-in locale translations.
+   */
+  translations?: Partial<SDKTranslations>
   /**
    * Local tasks — passed directly to the SDK, skipping server fetch.
    * Use this for local/offline mode.
@@ -79,6 +87,8 @@ const OnTheWayContext = createContext<OnTheWayContextValue>({
 export function OnTheWayProvider({
   projectId,
   apiUrl,
+  locale,
+  translations,
   tasks,
   onComplete,
   onSkip,
@@ -91,6 +101,8 @@ export function OnTheWayProvider({
     const instance = new OnTheWay({
       projectId,
       apiUrl,
+      locale,
+      translations,
       tasks,
       onComplete,
       onSkip,

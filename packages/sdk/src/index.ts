@@ -41,6 +41,40 @@ export interface CrossPageTourState {
   startedAt: string
 }
 
+// ---- Translations ----
+
+/** SDK UI text translations */
+export interface SDKTranslations {
+  nextBtn: string
+  prevBtn: string
+  doneBtn: string
+  continueBtn: string
+  progressText: string
+  checklistTitle: string
+  checklistCompleted: string
+}
+
+const TRANSLATIONS: Record<string, SDKTranslations> = {
+  en: {
+    nextBtn: 'Next',
+    prevBtn: 'Previous',
+    doneBtn: 'Done',
+    continueBtn: 'Next →',
+    progressText: '{{current}} / {{total}}',
+    checklistTitle: 'Getting Started',
+    checklistCompleted: 'All done!',
+  },
+  zh: {
+    nextBtn: '下一步',
+    prevBtn: '上一步',
+    doneBtn: '完成',
+    continueBtn: '继续 →',
+    progressText: '{{current}} / {{total}}',
+    checklistTitle: '开始使用',
+    checklistCompleted: '全部完成！',
+  },
+}
+
 // ---- Types ----
 
 /** Configuration passed to the OnTheWay constructor */
@@ -49,6 +83,14 @@ export interface OnTheWayConfig {
   apiUrl?: string
   /** Custom Driver.js CSS URL. Set to `false` to disable auto-injection. */
   driverCssUrl?: string | false
+  /**
+   * Locale for SDK UI text. Default `'en'`. Built-in: `'en'`, `'zh'`.
+   */
+  locale?: string
+  /**
+   * Custom translation overrides. Merged on top of the built-in locale translations.
+   */
+  translations?: Partial<SDKTranslations>
   /**
    * Local tasks to use instead of fetching from server.
    * When provided, the SDK skips the server fetch entirely.
@@ -83,8 +125,8 @@ export interface TaskConfig {
 export interface StepConfig {
   element: string
   popover: {
-    title: string
-    description: string
+    title: string | Record<string, string>
+    description: string | Record<string, string>
     side?: 'top' | 'bottom' | 'left' | 'right'
   }
   /**
@@ -115,6 +157,20 @@ export class OnTheWay {
   private visitorId: string
   /** Condition functions registered via `registerCondition` */
   private conditions: Map<string, () => boolean> = new Map()
+
+  /** Resolved translations (built-in + custom overrides) */
+  private get t(): SDKTranslations {
+    const locale = this.config.locale || 'en'
+    const base = TRANSLATIONS[locale] || TRANSLATIONS['en']
+    return { ...base, ...this.config.translations }
+  }
+
+  /** Resolve a text value that may be a string or locale record */
+  private resolveText(text: string | Record<string, string>): string {
+    if (typeof text === 'string') return text
+    const locale = this.config.locale || 'en'
+    return text[locale] || text['en'] || Object.values(text)[0] || ''
+  }
 
   constructor(config: OnTheWayConfig) {
     this.config = {
@@ -371,8 +427,8 @@ export class OnTheWay {
     const steps: DriveStep[] = currentPageSteps.map(step => ({
       element: step.element,
       popover: {
-        title: step.popover.title,
-        description: step.popover.description,
+        title: this.resolveText(step.popover.title),
+        description: this.resolveText(step.popover.description),
         side: step.popover.side,
       },
     }))
@@ -446,10 +502,12 @@ export class OnTheWay {
 
     this.driverInstance = driver({
       showProgress: true,
-      progressText: `{{current}} / ${totalSteps}`,
+      progressText: this.t.progressText.replace('{{total}}', `${totalSteps}`),
       allowClose: true,
-      // When there are cross-page steps after, override "Done" to "Next →"
-      doneBtnText: hasMoreAfter ? 'Next →' : 'Done',
+      nextBtnText: this.t.nextBtn,
+      prevBtnText: this.t.prevBtn,
+      // When there are cross-page steps after, override "Done" to continue text
+      doneBtnText: hasMoreAfter ? this.t.continueBtn : this.t.doneBtn,
       steps,
       onHighlightStarted: (_el, _step, opts) => {
         const relativeIndex = opts.state.activeIndex ?? 0
@@ -800,9 +858,11 @@ export class OnTheWay {
     url?: string
     dom?: string
     model?: string
+    locale?: string
   }): Promise<StepConfig[]> {
     const dom = options?.dom || this.extractDOM()
     const url = options?.url || (typeof window !== 'undefined' ? window.location.href : '')
+    const locale = options?.locale || this.config.locale
 
     const res = await fetch(`${this.config.apiUrl}/ai/generate`, {
       method: 'POST',
@@ -812,6 +872,7 @@ export class OnTheWay {
         dom,
         url,
         model: options?.model,
+        locale,
       }),
     })
 
@@ -833,6 +894,13 @@ export class OnTheWay {
         advanceOnClick: s.advanceOnClick as boolean | undefined,
       } satisfies StepConfig
     })
+  }
+
+  /**
+   * Get the resolved translations for the current locale.
+   */
+  public getTranslations(): SDKTranslations {
+    return this.t
   }
 
   /**
