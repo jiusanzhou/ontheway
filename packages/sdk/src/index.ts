@@ -328,8 +328,20 @@ export class OnTheWay {
       return
     }
 
-    // Build Driver.js steps from fromIndex onward
-    const steps: DriveStep[] = allSteps.slice(fromIndex).map(step => ({
+    // Only include consecutive steps that are on the current page.
+    // Stop at the first step that requires a different page.
+    let samePageCount = 0
+    for (let i = fromIndex; i < allSteps.length; i++) {
+      const s = allSteps[i]
+      if (s.url && !this.stepUrlMatches(s.url)) break
+      samePageCount++
+    }
+
+    const currentPageSteps = allSteps.slice(fromIndex, fromIndex + samePageCount)
+    const hasMoreAfter = fromIndex + samePageCount < allSteps.length
+
+    // Build Driver.js steps for current page only
+    const steps: DriveStep[] = currentPageSteps.map(step => ({
       element: step.element,
       popover: {
         title: step.popover.title,
@@ -359,32 +371,34 @@ export class OnTheWay {
           const handler = () => {
             if (!this.driverInstance) return
             cleanupClickListeners()
-            // Delay to let click's native action (navigation, dialog open) proceed
             setTimeout(() => {
               if (!this.driverInstance) return
+              const isLastOnPage = relativeIndex >= samePageCount - 1
+
+              if (isLastOnPage && hasMoreAfter) {
+                // Navigate to next page's step
+                const nextAbsolute = fromIndex + samePageCount
+                this.saveCrossPageState(task.slug, nextAbsolute)
+                this.driverInstance.destroy()
+                window.location.href = allSteps[nextAbsolute].url!
+                return
+              }
+
               if (this.driverInstance.hasNextStep()) {
-                const nextAbsolute = absoluteIndex + 1
-                if (nextAbsolute < allSteps.length) {
-                  const nextStep = allSteps[nextAbsolute]
-                  if (nextStep.url && !this.stepUrlMatches(nextStep.url)) {
-                    this.saveCrossPageState(task.slug, nextAbsolute)
-                    this.driverInstance.destroy()
-                    window.location.href = nextStep.url
-                    return
-                  }
-                  // Wait for next element, then use moveTo for reliable positioning
-                  const nextRelative = this.driverInstance.getActiveIndex()! + 1
-                  this.waitForElement(nextStep.element, 3000).then((el) => {
-                    if (!this.driverInstance || !el) return
+                const nextRelative = relativeIndex + 1
+                const nextStep = currentPageSteps[nextRelative]
+                if (nextStep) {
+                  this.waitForElement(nextStep.element, 3000).then((found) => {
+                    if (!this.driverInstance) return
                     requestAnimationFrame(() => {
                       requestAnimationFrame(() => {
                         this.driverInstance?.moveTo(nextRelative)
                       })
                     })
                   })
-                  return
+                } else {
+                  this.driverInstance.moveNext()
                 }
-                this.driverInstance.moveNext()
               } else {
                 this.driverInstance.destroy()
               }
@@ -408,50 +422,51 @@ export class OnTheWay {
         if (!this.driverInstance) return
         cleanupClickListeners()
         const relativeIndex = this.driverInstance.getActiveIndex() ?? 0
-        const absoluteIndex = fromIndex + relativeIndex + 1
+        const isLastOnPage = relativeIndex >= samePageCount - 1
 
-        // Check if next step requires a different page
-        if (absoluteIndex < allSteps.length) {
-          const nextStep = allSteps[absoluteIndex]
-          if (nextStep.url && !this.stepUrlMatches(nextStep.url)) {
-            this.saveCrossPageState(task.slug, absoluteIndex)
-            this.driverInstance.destroy()
-            window.location.href = nextStep.url
-            return
-          }
+        // Last step on this page, but more steps on another page
+        if (isLastOnPage && hasMoreAfter) {
+          const nextAbsolute = fromIndex + samePageCount
+          this.saveCrossPageState(task.slug, nextAbsolute)
+          this.driverInstance.destroy()
+          window.location.href = allSteps[nextAbsolute].url!
+          return
+        }
 
-          // Destroy current highlight, wait for element, then re-highlight
-          const nextRelative = relativeIndex + 1
-          this.waitForElement(nextStep.element, 3000).then((el) => {
-            if (!this.driverInstance || !el) return
-            // Use requestAnimationFrame to ensure layout is settled
+        // No more steps at all
+        if (relativeIndex + 1 >= samePageCount) {
+          this.driverInstance.moveNext()
+          return
+        }
+
+        // Move to next step on same page
+        const nextRelative = relativeIndex + 1
+        const nextStep = currentPageSteps[nextRelative]
+        this.waitForElement(nextStep.element, 3000).then((el) => {
+          if (!this.driverInstance) return
+          requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                this.driverInstance?.moveTo(nextRelative)
-              })
+              this.driverInstance?.moveTo(nextRelative)
             })
           })
-        } else {
-          this.driverInstance.moveNext()
-        }
+        })
       },
       onDestroyStarted: () => {
-        if (this.driverInstance?.hasNextStep()) {
-          // Skipped
-          const relativeIndex = this.driverInstance.getActiveIndex() || 0
-          const currentIndex = fromIndex + relativeIndex
-          this.config.onSkip?.(task.id, currentIndex)
-          this.trackCompletion(task.id, currentIndex, totalSteps, false)
-          this.clearCrossPageState()
-          cleanupClickListeners()
-        } else {
-          // Completed
+        const isComplete = !this.driverInstance?.hasNextStep() && !hasMoreAfter
+        if (isComplete) {
+          // Completed all steps
           this.saveCompletedTask(task.id)
           this.config.onComplete?.(task.id)
           this.trackCompletion(task.id, totalSteps, totalSteps, true)
-          this.clearCrossPageState()
-          cleanupClickListeners()
+        } else {
+          // Skipped
+          const relativeIndex = this.driverInstance?.getActiveIndex() || 0
+          const currentIndex = fromIndex + relativeIndex
+          this.config.onSkip?.(task.id, currentIndex)
+          this.trackCompletion(task.id, currentIndex, totalSteps, false)
         }
+        this.clearCrossPageState()
+        cleanupClickListeners()
         this.driverInstance?.destroy()
       },
     })
