@@ -527,19 +527,24 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
     try {
       // Step 1: Collect internal links from current page
       const currentUrl = new URL(window.location.href)
-      const links = Array.from(document.querySelectorAll('a[href]'))
-        .map(a => {
-          try {
-            const url = new URL((a as HTMLAnchorElement).href, currentUrl.origin)
-            if (url.origin === currentUrl.origin) return url.pathname + url.search
-          } catch {}
-          return null
-        })
-        .filter((v, i, arr): v is string => !!v && arr.indexOf(v) === i)
-        .slice(0, 15)
+      const links: string[] = []
+      document.querySelectorAll('a[href]').forEach(a => {
+        try {
+          const href = (a as HTMLAnchorElement).getAttribute('href')
+          if (!href || href === '#' || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:')) return
+          const url = new URL(href, currentUrl.origin)
+          if (url.origin === currentUrl.origin) {
+            const path = url.pathname + url.search
+            if (!links.includes(path)) links.push(path)
+          }
+        } catch {
+          // Skip invalid URLs
+        }
+      })
+      const uniqueLinks = links.slice(0, 15)
 
       // Always include current page
-      const pagesToScan = [currentUrl.pathname, ...links.filter(l => l !== currentUrl.pathname)].slice(0, 8)
+      const pagesToScan = [currentUrl.pathname, ...uniqueLinks.filter(l => l !== currentUrl.pathname)].slice(0, 8)
 
       setScanProgress(`Scanning ${pagesToScan.length} pages...`)
 
@@ -551,7 +556,7 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
         url: currentUrl.pathname,
         title: document.title,
         dom: extractDOM(),
-        links,
+        links: uniqueLinks,
       })
 
       // Other pages — fetch HTML and extract
@@ -586,16 +591,17 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
 
           // Extract simplified DOM from the parsed document
           const bodyDom = simplifyDOM(doc.body)
-          const pageLinks = Array.from(doc.querySelectorAll('a[href]'))
-            .map(a => {
-              try {
-                const url = new URL((a as HTMLAnchorElement).href, currentUrl.origin)
-                if (url.origin === currentUrl.origin) return url.pathname
-              } catch {}
-              return null
-            })
-            .filter((v): v is string => !!v)
-            .slice(0, 10)
+          const pageLinks: string[] = []
+          doc.querySelectorAll('a[href]').forEach(a => {
+            try {
+              const href = (a as HTMLAnchorElement).getAttribute('href')
+              if (!href || href === '#') return
+              const u = new URL(href, currentUrl.origin)
+              if (u.origin === currentUrl.origin && !pageLinks.includes(u.pathname)) {
+                pageLinks.push(u.pathname)
+              }
+            } catch {}
+          })
 
           pages.push({ url: pageUrl, title, dom: bodyDom, links: pageLinks })
         } catch {
