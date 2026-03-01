@@ -95,7 +95,7 @@ export default async function DashboardPage() {
               </p>
             </div>
             <a
-              href="/api/stripe/checkout"
+              href="/api/payment/checkout"
               className="shrink-0 bg-white text-black px-6 py-2.5 rounded-xl hover:bg-gray-100 transition-all text-sm font-medium"
             >
               Upgrade — $19/mo
