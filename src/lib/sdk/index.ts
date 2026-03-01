@@ -146,6 +146,9 @@ export class OnTheWay {
       await this.fetchTasks()
     }
 
+    // Also load tasks saved by DevTools to localStorage
+    this.loadLocalTasks()
+
     this.state.loaded = true
 
     // Check for cross-page tour resume before auto-start
@@ -190,6 +193,44 @@ export class OnTheWay {
       this.state.tasks = data.tasks || []
     } catch (error) {
       console.warn('[OnTheWay] Failed to load config:', error)
+    }
+  }
+
+  /**
+   * Load tasks saved by DevTools to localStorage.
+   * Merges with existing tasks (server or local config), avoiding slug duplicates.
+   */
+  private loadLocalTasks() {
+    if (typeof localStorage === 'undefined') return
+    const key = `otw_tasks_${this.config.projectId}`
+    try {
+      const raw = localStorage.getItem(key)
+      if (!raw) return
+      const localTasks = JSON.parse(raw)
+      if (!Array.isArray(localTasks)) return
+
+      const existingSlugs = new Set(this.state.tasks.map(t => t.slug))
+      for (const lt of localTasks) {
+        if (existingSlugs.has(lt.slug)) continue
+        // Convert DevTools format to TaskConfig
+        this.state.tasks.push({
+          id: lt.id || 'local_' + Date.now(),
+          slug: lt.slug,
+          trigger: (lt.trigger as TaskConfig['trigger']) || 'manual',
+          steps: (lt.steps || []).map((s: any) => ({
+            element: s.element || s.selector || '',
+            popover: {
+              title: s.popover?.title || s.title || '',
+              description: s.popover?.description || s.content || s.description || '',
+              side: s.popover?.side || s.position || undefined,
+            },
+            url: s.url || undefined,
+          })),
+        })
+        existingSlugs.add(lt.slug)
+      }
+    } catch {
+      // Ignore parse errors
     }
   }
 

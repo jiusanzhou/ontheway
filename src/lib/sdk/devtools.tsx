@@ -562,13 +562,26 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
         setScanProgress(`Scanning ${pages.length + 1}/${pagesToScan.length}: ${pageUrl}`)
 
         try {
-          const res = await fetch(pageUrl, { credentials: 'include' })
+          // Fetch as plain HTML (not RSC)
+          const res = await fetch(pageUrl, {
+            credentials: 'include',
+            headers: { 'Accept': 'text/html' },
+          })
           if (!res.ok) continue
+          const contentType = res.headers.get('content-type') || ''
+          if (!contentType.includes('text/html')) continue
           const html = await res.text()
+          if (!html || html.length < 50) continue
 
           // Parse HTML to extract meaningful DOM
-          const parser = new DOMParser()
-          const doc = parser.parseFromString(html, 'text/html')
+          let doc: Document
+          try {
+            const parser = new DOMParser()
+            doc = parser.parseFromString(html, 'text/html')
+          } catch {
+            continue // Skip unparseable pages
+          }
+          if (!doc.body) continue
           const title = doc.title || pageUrl
 
           // Extract simplified DOM from the parsed document
