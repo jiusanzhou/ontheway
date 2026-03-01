@@ -444,6 +444,7 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
     setSaving(true)
     setSaveMsg('')
     try {
+      // Try saving to server first
       const res = await fetch(`${baseUrl}/api/projects/${projectId}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -461,20 +462,59 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
         }),
       })
       if (res.ok) {
-        setSaveMsg('✅ Saved!')
+        setSaveMsg('✅ Saved to server!')
         setSteps([])
         setTaskName('')
         setTaskSlug('')
         setEditingStep(null)
         stopRecording()
       } else {
-        const err = await res.json()
-        setSaveMsg('❌ ' + (err.error || 'Failed'))
+        // Fallback: save to localStorage
+        saveToLocal(taskName, taskSlug, trigger, steps)
       }
     } catch (e) {
-      setSaveMsg('❌ Network error')
+      // Fallback: save to localStorage
+      saveToLocal(taskName, taskSlug, trigger, steps)
     }
     setSaving(false)
+  }
+
+  const saveToLocal = (name: string, slug: string, trig: string, stps: RecordedStep[]) => {
+    const key = `otw_tasks_${projectId}`
+    const existing = JSON.parse(localStorage.getItem(key) || '[]')
+    const task = {
+      id: 'local_' + Date.now(),
+      name,
+      slug,
+      trigger: trig,
+      steps: stps.map(s => ({
+        element: s.selector,
+        popover: { title: s.title, description: s.description, side: s.position },
+        url: s.url,
+      })),
+      createdAt: new Date().toISOString(),
+    }
+    existing.push(task)
+    localStorage.setItem(key, JSON.stringify(existing))
+    setSaveMsg('✅ Saved locally! (Export JSON below)')
+    setSteps([])
+    setTaskName('')
+    setTaskSlug('')
+    setEditingStep(null)
+    stopRecording()
+  }
+
+  // Export local tasks as JSON
+  const exportLocalTasks = () => {
+    const key = `otw_tasks_${projectId}`
+    const data = localStorage.getItem(key) || '[]'
+    const blob = new Blob([data], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `ontheway-tasks-${projectId}.json`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   // ---- Auto Scan ----
@@ -600,9 +640,33 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
       })
       if (res.ok) {
         setScanResults(prev => prev?.map(t => t.slug === tour.slug ? { ...t, taskName: '✅ ' + t.taskName } : t) || null)
+      } else {
+        // Fallback: save to localStorage
+        saveScanToLocal(tour)
       }
-    } catch {}
+    } catch {
+      saveScanToLocal(tour)
+    }
     setScanSaving(null)
+  }
+
+  const saveScanToLocal = (tour: ScanTour) => {
+    const key = `otw_tasks_${projectId}`
+    const existing = JSON.parse(localStorage.getItem(key) || '[]')
+    existing.push({
+      id: 'scan_' + Date.now(),
+      name: tour.taskName,
+      slug: tour.slug,
+      trigger: tour.trigger,
+      steps: tour.steps.map(s => ({
+        element: s.element,
+        popover: s.popover,
+        url: s.url,
+      })),
+      createdAt: new Date().toISOString(),
+    })
+    localStorage.setItem(key, JSON.stringify(existing))
+    setScanResults(prev => prev?.map(t => t.slug === tour.slug ? { ...t, taskName: '✅ ' + t.taskName } : t) || null)
   }
 
   const currentStep = steps.find(s => s.id === editingStep)
@@ -1059,6 +1123,30 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
               <button style={{ ...S.btnOutline, width: '100%', marginTop: 8 }} onClick={fetchTasks}>
                 ↻ Refresh
               </button>
+              {/* Local tasks */}
+              {(() => {
+                const localKey = `otw_tasks_${projectId}`
+                const localTasks = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem(localKey) || '[]') : []
+                if (localTasks.length === 0) return null
+                return (
+                  <>
+                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 12, marginBottom: 4, fontWeight: 600 }}>
+                      Local Tasks ({localTasks.length})
+                    </div>
+                    {localTasks.map((t: any) => (
+                      <div key={t.id} style={{ ...S.stepItem(false), display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 500, fontSize: 12 }}>{t.name}</div>
+                          <div style={{ fontSize: 10, color: '#9ca3af' }}>{t.slug} · {t.steps?.length || 0} steps · 💾 local</div>
+                        </div>
+                      </div>
+                    ))}
+                    <button style={{ ...S.btnOutline, width: '100%', marginTop: 4 }} onClick={exportLocalTasks}>
+                      📥 Export JSON
+                    </button>
+                  </>
+                )
+              })()}
             </div>
           )}
         </div>
