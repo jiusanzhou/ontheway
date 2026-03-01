@@ -261,8 +261,8 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t py-8 sm:py-10">
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div className="text-sm text-gray-500">
-            🛤️ OnTheWay · Built by <a href="https://zoe.im" className="underline hover:text-black transition-colors">Zoe</a>
+          <div className="text-sm text-gray-500 flex items-center gap-1.5">
+            <img src="/logo.svg" alt="OnTheWay" className="w-5 h-5" /> OnTheWay · Built by <a href="https://zoe.im" className="underline hover:text-black transition-colors">Zoe</a>
           </div>
           <div className="flex gap-6 text-sm text-gray-400">
             <Link href="/docs" className="hover:text-black transition-colors">Docs</Link>

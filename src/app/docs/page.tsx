@@ -606,7 +606,7 @@ tasks.forEach(task => {
 
           {/* Footer */}
           <div className="border-t mt-16 pt-8 text-center text-gray-400 text-sm">
-            <p>Built by <a href="https://zoe.im" className="underline hover:text-gray-600">Zoe</a></p>
+            <p className="flex items-center justify-center gap-1.5"><img src="/logo.svg" alt="OnTheWay" className="w-4 h-4" /> Built by <a href="https://zoe.im" className="underline hover:text-gray-600">Zoe</a></p>
           </div>
         </main>
       </div>
