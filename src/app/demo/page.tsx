@@ -1,60 +1,73 @@
 'use client'
 
 import { useState } from 'react'
+import { OnTheWayProvider } from '@/lib/sdk/react'
+import { HelpMenu } from '@/lib/sdk/components'
 import dynamic from 'next/dynamic'
 
 const OnTheWayDevToolsPanel = dynamic(() => import('@/lib/sdk/devtools'), { ssr: false })
 
-export default function DemoPage() {
+// Local task definitions for demo (no server needed)
+const DEMO_TASKS = [
+  {
+    id: 'demo-welcome',
+    slug: 'welcome-tour',
+    trigger: 'manual' as const,
+    steps: [
+      {
+        element: '#demo-header',
+        popover: {
+          title: 'Welcome to the Demo!',
+          description: 'This is how OnTheWay tours work. Click Next to continue.',
+          side: 'bottom' as const,
+        },
+      },
+      {
+        element: '#demo-stats',
+        popover: {
+          title: 'Key Metrics',
+          description: 'Track your projects, tasks and completion rates at a glance.',
+          side: 'bottom' as const,
+        },
+      },
+      {
+        element: '#demo-main',
+        popover: {
+          title: 'Main Content',
+          description: 'This is where your main content lives.',
+          side: 'top' as const,
+        },
+      },
+      {
+        element: '#demo-action',
+        popover: {
+          title: 'Take Action!',
+          description: 'Click this button to perform the main action. Tour complete!',
+          side: 'bottom' as const,
+        },
+      },
+    ],
+  },
+  {
+    id: 'demo-sidebar',
+    slug: 'sidebar-tour',
+    trigger: 'manual' as const,
+    steps: [
+      {
+        element: '#demo-sidebar',
+        popover: {
+          title: 'Navigation Sidebar',
+          description: 'Use the sidebar to navigate between different sections of the app.',
+          side: 'right' as const,
+        },
+      },
+    ],
+  },
+]
+
+function DemoContent() {
   const [showFeatures, setShowFeatures] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-
-  const startTour = () => {
-    setSidebarOpen(false)
-    import('driver.js').then(({ driver }) => {
-      const driverObj = driver({
-        showProgress: true,
-        steps: [
-          { 
-            element: '#demo-header', 
-            popover: { 
-              title: 'Welcome to the Demo!', 
-              description: 'This is how OnTheWay tours work. Click Next to continue.',
-              side: 'bottom' as const
-            } 
-          },
-          { 
-            element: '#demo-stats', 
-            popover: { 
-              title: 'Key Metrics', 
-              description: 'Track your projects, tasks and completion rates at a glance.',
-              side: 'bottom' as const
-            } 
-          },
-          { 
-            element: '#demo-main', 
-            popover: { 
-              title: 'Main Content', 
-              description: 'This is where your main content lives.',
-              side: 'top' as const
-            } 
-          },
-          { 
-            element: '#demo-action', 
-            popover: { 
-              title: 'Take Action!', 
-              description: 'Click this button to perform the main action. Tour complete!',
-              side: 'bottom' as const
-            } 
-          },
-        ],
-        onDestroyStarted: () => {
-          driverObj.destroy()
-        }
-      })
-      driverObj.drive()
-    })
-  }
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -80,12 +93,6 @@ export default function DemoPage() {
           </h1>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">
-          <button 
-            onClick={startTour}
-            className="bg-blue-600 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg hover:bg-blue-700 text-sm sm:text-base"
-          >
-            Start Tour
-          </button>
           <button className="text-gray-600 hidden sm:block">Profile</button>
         </div>
       </header>
@@ -153,12 +160,13 @@ export default function DemoPage() {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 sm:p-6">
               <h3 className="font-bold text-blue-900 mb-2 text-sm sm:text-base">How it works</h3>
               <p className="text-blue-800 mb-3 sm:mb-4 text-sm sm:text-base">
-                This demo shows how OnTheWay product tours work. Click the &quot;Start Tour&quot; button 
-                above to see a guided walkthrough of this page.
+                This demo shows how OnTheWay product tours work. Click the <strong>&quot;?&quot; button</strong> in 
+                the bottom-right corner to see available tours and start a guided walkthrough.
               </p>
               <p className="text-blue-700 text-xs sm:text-sm">
-                In production, you would record steps in your actual app using the OnTheWay recorder,
-                then deploy them with a single script tag.
+                This page uses the OnTheWay SDK in <strong>local mode</strong> — tours are defined in code 
+                with no server needed. You can also try the <strong>DevTools panel</strong> below to 
+                record new steps visually.
               </p>
             </div>
 
@@ -174,13 +182,26 @@ export default function DemoPage() {
         </main>
       </div>
 
-      {/* DevTools - only show in development */}
-      {process.env.NODE_ENV === 'development' && (
-        <OnTheWayDevToolsPanel
-          projectId="6fea4487-17a3-49f5-ad62-1689cf566b57"
-          apiKey="otw_ee5610b924b1a0716565c954f2847b49"
-        />
-      )}
+      {/* HelpMenu from SDK — shows available tours */}
+      <HelpMenu />
+
+      {/* DevTools — visible on demo page so users can try recording */}
+      <OnTheWayDevToolsPanel
+        projectId="demo-project"
+        apiKey="demo"
+      />
     </div>
+  )
+}
+
+export default function DemoPage() {
+  return (
+    <OnTheWayProvider
+      projectId="demo-project"
+      onComplete={(taskId) => console.log('Tour completed:', taskId)}
+      onSkip={(taskId, stepIndex) => console.log('Tour skipped at step:', stepIndex)}
+    >
+      <DemoContent />
+    </OnTheWayProvider>
   )
 }

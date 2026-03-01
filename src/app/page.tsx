@@ -50,12 +50,14 @@ export default function Home() {
                 <div className="w-3 h-3 rounded-full bg-green-400" />
               </div>
               <code className="text-sm sm:text-[13px] leading-relaxed">
-                <span className="text-gray-500">{'<!-- One line to activate -->'}</span>{'\n'}
-                <span className="text-pink-400">{'<script'}</span>{' '}
-                <span className="text-sky-300">src</span><span className="text-gray-500">=</span><span className="text-green-300">{'"https://YOUR_DOMAIN/sdk.js"'}</span>{'\n'}
-                {'  '}<span className="text-sky-300">data-project</span><span className="text-gray-500">=</span><span className="text-green-300">{'"YOUR_PROJECT_ID"'}</span>
-                <span className="text-pink-400">{'>'}</span>
-                <span className="text-pink-400">{'</script>'}</span>
+                <span className="text-gray-500">{'// Install'}</span>{'\n'}
+                <span className="text-gray-400">{'$ npm install '}</span>
+                <span className="text-green-300">{'ontheway-sdk'}</span>{'\n\n'}
+                <span className="text-gray-500">{'// Use'}</span>{'\n'}
+                <span className="text-pink-400">{'import'}</span>{' { '}
+                <span className="text-sky-300">{'OnTheWay'}</span>{' } '}
+                <span className="text-pink-400">{'from'}</span>{' '}
+                <span className="text-green-300">{'"ontheway-sdk"'}</span>
               </code>
             </div>
             <p className="text-xs text-gray-400 mt-3">~5KB gzipped · Zero dependencies · Works everywhere</p>
@@ -143,21 +145,13 @@ export default function Home() {
             <p className="text-gray-500 text-base sm:text-lg">Choose your integration method</p>
           </div>
           <div className="grid sm:grid-cols-2 gap-6">
-            {/* Script tag */}
-            <div className="bg-white rounded-2xl border p-6">
-              <h4 className="font-bold mb-1">Script Tag</h4>
-              <p className="text-sm text-gray-500 mb-4">Just paste in your HTML</p>
-              <div className="bg-gray-950 rounded-lg p-4 text-xs font-mono text-green-300 overflow-x-auto">
-                {'<script src="…/sdk.js"'}<br />{'  data-project="ID">'}<br />{'</script>'}
-              </div>
-            </div>
             {/* NPM */}
             <div className="bg-white rounded-2xl border p-6">
               <h4 className="font-bold mb-1">NPM Package</h4>
               <p className="text-sm text-gray-500 mb-4">For React / Next.js / Node apps</p>
               <div className="bg-gray-950 rounded-lg p-4 text-xs font-mono overflow-x-auto space-y-2">
-                <div className="text-gray-400">$ npm install @ontheway/sdk</div>
-                <div className="text-sky-300">{'import { OnTheWay } from "@ontheway/sdk"'}</div>
+                <div className="text-gray-400">$ npm install ontheway-sdk</div>
+                <div className="text-sky-300">{'import { OnTheWay } from "ontheway-sdk"'}</div>
               </div>
             </div>
             {/* React */}
@@ -174,6 +168,14 @@ export default function Home() {
               <p className="text-sm text-gray-500 mb-4">Record tours in your dev environment</p>
               <div className="bg-gray-950 rounded-lg p-4 text-xs font-mono text-purple-300 overflow-x-auto">
                 {'<OnTheWayDevToolsPanel'}<br />{'  projectId="ID"'}<br />{'  apiKey="otw_…" />'}
+              </div>
+            </div>
+            {/* Script tag — CDN */}
+            <div className="bg-white rounded-2xl border p-6">
+              <h4 className="font-bold mb-1">Script Tag</h4>
+              <p className="text-sm text-gray-500 mb-4">One line, zero config (CDN)</p>
+              <div className="bg-gray-950 rounded-lg p-4 text-xs font-mono text-green-300 overflow-x-auto">
+                {'<script src="https://cdn.jsdelivr.net/npm/ontheway-sdk/dist/cdn.global.js"'}<br />{'  data-project="ID"></script>'}
               </div>
             </div>
           </div>
@@ -265,7 +267,7 @@ export default function Home() {
           <div className="flex gap-6 text-sm text-gray-400">
             <Link href="/docs" className="hover:text-black transition-colors">Docs</Link>
             <Link href="/demo" className="hover:text-black transition-colors">Demo</Link>
-            <a href="https://github.com/nicoleoliver28/ontheway" className="hover:text-black transition-colors">GitHub</a>
+            <a href="https://github.com/jiusanzhou/ontheway" className="hover:text-black transition-colors">GitHub</a>
           </div>
         </div>
       </footer>

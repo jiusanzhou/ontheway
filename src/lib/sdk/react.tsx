@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
-import { OnTheWay } from './index'
+import { OnTheWay, type TaskConfig } from './index'
 
 // ---- Types ----
 
@@ -35,6 +35,8 @@ export interface OnTheWayContextValue {
 export interface OnTheWayProviderProps {
   projectId: string
   apiUrl?: string
+  /** Local task definitions — when provided, SDK skips the server fetch. */
+  tasks?: TaskConfig[]
   onComplete?: (taskId: string) => void
   onSkip?: (taskId: string, stepIndex: number) => void
   children: ReactNode
@@ -74,6 +76,7 @@ const OnTheWayContext = createContext<OnTheWayContextValue>({
 export function OnTheWayProvider({
   projectId,
   apiUrl,
+  tasks,
   onComplete,
   onSkip,
   children,
@@ -85,6 +88,7 @@ export function OnTheWayProvider({
     const instance = new OnTheWay({
       projectId,
       apiUrl,
+      tasks,
       onComplete,
       onSkip,
     })

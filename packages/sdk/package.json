@@ -1,6 +1,6 @@
 {
   "name": "ontheway-sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Lightweight onboarding SDK based on Driver.js",
   "license": "MIT",
   "sideEffects": false,
@@ -55,10 +55,15 @@
         "types": "./dist/devtools.d.cts",
         "default": "./dist/devtools.cjs"
       }
+    },
+    "./cdn": {
+      "default": "./dist/cdn.global.js"
     }
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
+  "unpkg": "./dist/cdn.global.js",
+  "jsdelivr": "./dist/cdn.global.js",
   "types": "./dist/index.d.ts",
   "files": [
     "dist"

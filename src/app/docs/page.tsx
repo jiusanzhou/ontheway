@@ -138,14 +138,14 @@ export default function DocsPage() {
           {/* Script Tag */}
           <SubSection id="install-script">Script Tag</SubSection>
           <p className="text-gray-600 mb-2">Add one line before <Code>{'</body>'}</Code>:</p>
-          <CodeBlock>{`<script src="https://YOUR_DOMAIN/sdk.js" 
+          <CodeBlock>{`<script src="https://cdn.jsdelivr.net/npm/ontheway-sdk/dist/cdn.global.js" 
         data-project="YOUR_PROJECT_ID"></script>`}</CodeBlock>
           <p className="text-gray-500 text-sm">The SDK auto-initializes and exposes <Code>window.ontheway</Code> globally.</p>
 
           {/* NPM */}
           <SubSection id="install-npm">NPM / Yarn / pnpm</SubSection>
-          <CodeBlock title="Terminal">{`npm install @ontheway/sdk`}</CodeBlock>
-          <CodeBlock title="app.js">{`import { OnTheWay } from '@ontheway/sdk'
+          <CodeBlock title="Terminal">{`npm install ontheway-sdk`}</CodeBlock>
+          <CodeBlock title="app.js">{`import { OnTheWay } from 'ontheway-sdk'
 
 const otw = new OnTheWay({ projectId: 'YOUR_PROJECT_ID' })
 
@@ -163,7 +163,7 @@ otw.start('welcome-tour')`}</CodeBlock>
           <p className="text-gray-600 mb-2">
             Wrap your app root with <Code>OnTheWayProvider</Code>. It initializes the SDK and makes it available to all child components.
           </p>
-          <CodeBlock title="app/layout.tsx (Next.js) or App.tsx">{`import { OnTheWayProvider } from '@ontheway/sdk/react'
+          <CodeBlock title="app/layout.tsx (Next.js) or App.tsx">{`import { OnTheWayProvider } from 'ontheway-sdk/react'
 
 export default function RootLayout({ children }) {
   return (
@@ -227,7 +227,7 @@ export default function RootLayout({ children }) {
           <p className="text-gray-600 mb-2">
             Access the SDK from any component. Most flexible approach.
           </p>
-          <CodeBlock title="SettingsPage.tsx">{`import { useOnTheWay } from '@ontheway/sdk/react'
+          <CodeBlock title="SettingsPage.tsx">{`import { useOnTheWay } from 'ontheway-sdk/react'
 
 function SettingsPage() {
   const { otw, ready, start, reset, resetAll } = useOnTheWay()
@@ -313,8 +313,8 @@ function SettingsPage() {
           <p className="text-gray-600 mb-2">
             A ready-made floating help button. Renders a <Code>?</Code> button that opens a panel listing all available tours. Users click to start any tour.
           </p>
-          <CodeBlock title="layout.tsx">{`import { OnTheWayProvider } from '@ontheway/sdk/react'
-import { HelpMenu } from '@ontheway/sdk/components'
+          <CodeBlock title="layout.tsx">{`import { OnTheWayProvider } from 'ontheway-sdk/react'
+import { HelpMenu } from 'ontheway-sdk/components'
 
 export default function Layout({ children }) {
   return (
@@ -392,7 +392,7 @@ export default function Layout({ children }) {
           <p className="text-gray-600 mb-2">
             Wrap any element to make it start a specific tour on click. Great for contextual help links.
           </p>
-          <CodeBlock title="SettingsPage.tsx">{`import { HelpTrigger } from '@ontheway/sdk/components'
+          <CodeBlock title="SettingsPage.tsx">{`import { HelpTrigger } from 'ontheway-sdk/components'
 
 function SettingsPage() {
   return (
@@ -451,7 +451,7 @@ function SettingsPage() {
           {/* ============ Vanilla JS ============ */}
           <SectionAnchor id="vanilla">Vanilla JavaScript</SectionAnchor>
           <p className="text-gray-600 mb-2">For non-React projects, use the SDK class directly:</p>
-          <CodeBlock title="app.js">{`import { OnTheWay } from '@ontheway/sdk'
+          <CodeBlock title="app.js">{`import { OnTheWay } from 'ontheway-sdk'
 
 const otw = new OnTheWay({
   projectId: 'YOUR_PROJECT_ID',

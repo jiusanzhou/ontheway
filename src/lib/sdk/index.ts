@@ -3,7 +3,7 @@
  * Lightweight onboarding SDK based on Driver.js
  *
  * Usage:
- * import { OnTheWay } from '@ontheway/sdk'
+ * import { OnTheWay } from 'ontheway-sdk'
  * const otw = new OnTheWay({ projectId: 'PROJECT_ID' })
  * otw.start('task-slug')
  */
@@ -49,6 +49,8 @@ export interface OnTheWayConfig {
   apiUrl?: string
   /** Custom Driver.js CSS URL. Set to `false` to disable auto-injection. */
   driverCssUrl?: string | false
+  /** Local task definitions — when provided, SDK skips the server fetch. */
+  tasks?: TaskConfig[]
   onComplete?: (taskId: string) => void
   onSkip?: (taskId: string, stepIndex: number) => void
 }
@@ -137,8 +139,12 @@ export class OnTheWay {
     // Load completed tasks from localStorage
     this.loadCompletedTasks()
 
-    // Fetch task configs
-    await this.fetchTasks()
+    // Use local tasks if provided, otherwise fetch from server
+    if (this.config.tasks && this.config.tasks.length > 0) {
+      this.state.tasks = this.config.tasks
+    } else {
+      await this.fetchTasks()
+    }
 
     this.state.loaded = true
 

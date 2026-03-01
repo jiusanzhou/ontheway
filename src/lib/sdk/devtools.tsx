@@ -7,7 +7,7 @@
  * Auto-disabled in production. Steps are saved directly to OnTheWay backend.
  * 
  * Usage:
- *   import { OnTheWayDevTools } from '@ontheway/sdk/devtools'
+ *   import { OnTheWayDevTools } from 'ontheway-sdk/devtools'
  *   
  *   // In your app root (only runs in development):
  *   if (process.env.NODE_ENV === 'development') {
