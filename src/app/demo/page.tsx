@@ -198,6 +198,7 @@ export default function DemoPage() {
   return (
     <OnTheWayProvider
       projectId="demo-project"
+      tasks={DEMO_TASKS}
       onComplete={(taskId) => console.log('Tour completed:', taskId)}
       onSkip={(taskId, stepIndex) => console.log('Tour skipped at step:', stepIndex)}
     >
