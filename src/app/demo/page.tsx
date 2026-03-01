@@ -182,8 +182,8 @@ function DemoContent() {
         </main>
       </div>
 
-      {/* HelpMenu from SDK — shows available tours */}
-      <HelpMenu />
+      {/* HelpMenu from SDK — shows available tours, offset above DevTools */}
+      <HelpMenu position="bottom-left" />
 
       {/* DevTools — visible on demo page so users can try recording */}
       <OnTheWayDevToolsPanel
