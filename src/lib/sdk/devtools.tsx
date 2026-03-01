@@ -48,7 +48,58 @@ interface Task {
   enabled: boolean
 }
 
+interface ScanTour {
+  taskName: string
+  slug: string
+  priority: string
+  reason: string
+  trigger: string
+  steps: Array<{
+    element: string
+    popover: { title: string; description: string; side?: string }
+    url?: string
+    advanceOnClick?: boolean
+  }>
+}
+
 // ---- Selector Generator (same logic as recorder-snippet.js) ----
+
+// ---- DOM simplifier for scanned pages ----
+function simplifyDOM(el: Element, depth = 0): string {
+  if (depth > 6) return ''
+  const tag = el.tagName.toLowerCase()
+  if (['script', 'style', 'noscript', 'svg', 'path', 'link', 'meta'].includes(tag)) return ''
+
+  const attrs: string[] = []
+  if (el.id) attrs.push(`id="${el.id}"`)
+  if (el.className && typeof el.className === 'string') {
+    const cls = el.className.split(/\s+/).filter(c =>
+      !/^(w-|h-|p-|m-|text-|bg-|flex|grid|border|rounded|shadow|transition|hover:|focus:|sm:|md:|lg:|xl:)/.test(c)
+    ).slice(0, 3).join(' ')
+    if (cls) attrs.push(`class="${cls}"`)
+  }
+  if ((el as HTMLInputElement).type && tag === 'input') attrs.push(`type="${(el as HTMLInputElement).type}"`)
+  if ((el as HTMLInputElement).placeholder) attrs.push(`placeholder="${(el as HTMLInputElement).placeholder}"`)
+
+  const indent = '  '.repeat(depth)
+  const attrStr = attrs.length ? ' ' + attrs.join(' ') : ''
+  const text = Array.from(el.childNodes)
+    .filter(n => n.nodeType === 3)
+    .map(n => n.textContent?.trim())
+    .filter(Boolean)
+    .join(' ')
+    .substring(0, 60)
+
+  const children = Array.from(el.children)
+    .map(c => simplifyDOM(c, depth + 1))
+    .filter(Boolean)
+    .join('\n')
+
+  if (!children && !text && !['input', 'button', 'img'].includes(tag)) return ''
+  if (!children) return `${indent}<${tag}${attrStr}>${text ? ' ' + text + ' ' : ''}</${tag}>`
+  return `${indent}<${tag}${attrStr}>${text ? ' ' + text : ''}\n${children}\n${indent}</${tag}>`
+}
+
 
 function genSelector(el: Element): string {
   const ds = (el as HTMLElement).dataset
@@ -103,7 +154,7 @@ interface DevToolsPanelProps {
 
 export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevToolsPanelProps) {
   const [minimized, setMinimized] = useState(true)
-  const [tab, setTab] = useState<'record' | 'tasks'>('record')
+  const [tab, setTab] = useState<'record' | 'scan' | 'tasks'>('record')
 
   // Recording state
   const [recording, setRecording] = useState(false)
@@ -118,6 +169,14 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
   // AI generation
   const [aiIntent, setAiIntent] = useState('')
   const [aiGenerating, setAiGenerating] = useState(false)
+
+  // Auto Scan state
+  const [scanning, setScanning] = useState(false)
+  const [scanProgress, setScanProgress] = useState('')
+  const [scanResults, setScanResults] = useState<ScanTour[] | null>(null)
+  const [appSummary, setAppSummary] = useState('')
+  const [scanUrl, setScanUrl] = useState('')
+  const [scanSaving, setScanSaving] = useState<string | null>(null)
 
   // Tasks list
   const [tasks, setTasks] = useState<Task[]>([])
@@ -418,6 +477,134 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
     setSaving(false)
   }
 
+  // ---- Auto Scan ----
+  const autoScan = useCallback(async () => {
+    setScanning(true)
+    setScanResults(null)
+    setAppSummary('')
+    setScanProgress('Collecting page links...')
+
+    try {
+      // Step 1: Collect internal links from current page
+      const currentUrl = new URL(window.location.href)
+      const links = Array.from(document.querySelectorAll('a[href]'))
+        .map(a => {
+          try {
+            const url = new URL((a as HTMLAnchorElement).href, currentUrl.origin)
+            if (url.origin === currentUrl.origin) return url.pathname + url.search
+          } catch {}
+          return null
+        })
+        .filter((v, i, arr): v is string => !!v && arr.indexOf(v) === i)
+        .slice(0, 15)
+
+      // Always include current page
+      const pagesToScan = [currentUrl.pathname, ...links.filter(l => l !== currentUrl.pathname)].slice(0, 8)
+
+      setScanProgress(`Scanning ${pagesToScan.length} pages...`)
+
+      // Step 2: Fetch and extract DOM from each page
+      const pages: Array<{ url: string; title: string; dom: string; links: string[] }> = []
+
+      // Current page — use live DOM
+      pages.push({
+        url: currentUrl.pathname,
+        title: document.title,
+        dom: extractDOM(),
+        links,
+      })
+
+      // Other pages — fetch HTML and extract
+      for (let i = 0; i < pagesToScan.length && pages.length < 8; i++) {
+        const pageUrl = pagesToScan[i]
+        if (pageUrl === currentUrl.pathname) continue
+
+        setScanProgress(`Scanning ${pages.length + 1}/${pagesToScan.length}: ${pageUrl}`)
+
+        try {
+          const res = await fetch(pageUrl, { credentials: 'include' })
+          if (!res.ok) continue
+          const html = await res.text()
+
+          // Parse HTML to extract meaningful DOM
+          const parser = new DOMParser()
+          const doc = parser.parseFromString(html, 'text/html')
+          const title = doc.title || pageUrl
+
+          // Extract simplified DOM from the parsed document
+          const bodyDom = simplifyDOM(doc.body)
+          const pageLinks = Array.from(doc.querySelectorAll('a[href]'))
+            .map(a => {
+              try {
+                const url = new URL((a as HTMLAnchorElement).href, currentUrl.origin)
+                if (url.origin === currentUrl.origin) return url.pathname
+              } catch {}
+              return null
+            })
+            .filter((v): v is string => !!v)
+            .slice(0, 10)
+
+          pages.push({ url: pageUrl, title, dom: bodyDom, links: pageLinks })
+        } catch {
+          // Skip pages that can't be fetched
+        }
+      }
+
+      setScanProgress(`Analyzing ${pages.length} pages with AI...`)
+
+      // Step 3: Send to AI for analysis
+      const res = await fetch(`${baseUrl}/api/ai/scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pages,
+          intent: scanUrl || undefined,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (data.tours && data.tours.length > 0) {
+        setScanResults(data.tours)
+        setAppSummary(data.appSummary || '')
+        setScanProgress(`✨ Found ${data.tours.length} tours (${data.source})`)
+      } else {
+        setScanProgress('No tours generated. Try adding more pages or an intent description.')
+      }
+    } catch (e) {
+      setScanProgress('❌ Scan failed: ' + (e as Error).message)
+    }
+    setScanning(false)
+  }, [baseUrl, extractDOM, scanUrl])
+
+  // Save a scan result as a task
+  const saveScanTour = async (tour: ScanTour) => {
+    setScanSaving(tour.slug)
+    try {
+      const res = await fetch(`${baseUrl}/api/projects/${projectId}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: tour.taskName,
+          slug: tour.slug,
+          trigger: tour.trigger,
+          steps: tour.steps.map(s => ({
+            selector: s.element,
+            title: s.popover.title,
+            content: s.popover.description,
+            position: s.popover.side || 'auto',
+            spotlight: true,
+            url: s.url,
+          })),
+        }),
+      })
+      if (res.ok) {
+        setScanResults(prev => prev?.map(t => t.slug === tour.slug ? { ...t, taskName: '✅ ' + t.taskName } : t) || null)
+      }
+    } catch {}
+    setScanSaving(null)
+  }
+
   const currentStep = steps.find(s => s.id === editingStep)
 
   // ---- Styles (inline, no Tailwind dependency) ----
@@ -604,6 +791,9 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
           <button style={S.tab(tab === 'record')} onClick={() => setTab('record')}>
             ⏺ Record
           </button>
+          <button style={S.tab(tab === 'scan')} onClick={() => setTab('scan')}>
+            🔍 Auto Scan
+          </button>
           <button style={S.tab(tab === 'tasks')} onClick={() => setTab('tasks')}>
             📋 Tasks ({tasks.length})
           </button>
@@ -748,6 +938,98 @@ export function OnTheWayDevToolsPanel({ projectId, apiKey, serverUrl }: DevTools
                 )}
               </div>
             </>
+          ) : tab === 'scan' ? (
+            /* Auto Scan tab */
+            <div style={S.section}>
+              <div style={{ marginBottom: 8 }}>
+                <label style={S.label}>🔍 Auto Scan</label>
+                <p style={{ fontSize: 11, color: '#9ca3af', margin: '4px 0 8px' }}>
+                  Automatically scan your app pages and generate onboarding tours with AI.
+                </p>
+                <input
+                  style={{ ...S.input, marginBottom: 8 }}
+                  value={scanUrl}
+                  onChange={e => setScanUrl(e.target.value)}
+                  placeholder="Optional: describe what tours you need"
+                />
+                <button
+                  style={S.btn('#7c3aed', scanning)}
+                  onClick={autoScan}
+                  disabled={scanning}
+                >
+                  {scanning ? '⏳ Scanning...' : '🔍 Scan App & Generate Tours'}
+                </button>
+              </div>
+
+              {scanProgress && (
+                <div style={{
+                  fontSize: 11,
+                  color: scanProgress.startsWith('✨') ? '#16a34a' : scanProgress.startsWith('❌') ? '#dc2626' : '#6b7280',
+                  marginBottom: 8,
+                  padding: '6px 8px',
+                  background: '#f9fafb',
+                  borderRadius: 6,
+                }}>
+                  {scanProgress}
+                </div>
+              )}
+
+              {appSummary && (
+                <div style={{
+                  fontSize: 11,
+                  color: '#374151',
+                  padding: '8px 10px',
+                  background: '#f0fdf4',
+                  borderRadius: 6,
+                  marginBottom: 8,
+                  border: '1px solid #dcfce7',
+                }}>
+                  <strong>App:</strong> {appSummary}
+                </div>
+              )}
+
+              {scanResults && scanResults.map(tour => (
+                <div key={tour.slug} style={{
+                  ...S.stepItem(false),
+                  marginBottom: 6,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {tour.taskName}
+                        <span style={{
+                          fontSize: 9,
+                          padding: '1px 5px',
+                          borderRadius: 4,
+                          background: tour.priority === 'high' ? '#fef2f2' : tour.priority === 'medium' ? '#fffbeb' : '#f0fdf4',
+                          color: tour.priority === 'high' ? '#dc2626' : tour.priority === 'medium' ? '#d97706' : '#16a34a',
+                          fontWeight: 500,
+                        }}>{tour.priority}</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: '#9ca3af' }}>{tour.slug} · {tour.steps.length} steps · {tour.trigger}</div>
+                      {tour.reason && <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>{tour.reason}</div>}
+                    </div>
+                    <button
+                      style={S.btn('#111', scanSaving === tour.slug)}
+                      onClick={() => saveScanTour(tour)}
+                      disabled={scanSaving === tour.slug || tour.taskName.startsWith('✅')}
+                    >
+                      {tour.taskName.startsWith('✅') ? '✓' : scanSaving === tour.slug ? '...' : '💾'}
+                    </button>
+                  </div>
+                  {/* Step preview */}
+                  <div style={{ marginTop: 4 }}>
+                    {tour.steps.map((s, i) => (
+                      <div key={i} style={{ fontSize: 10, color: '#6b7280', padding: '2px 0', display: 'flex', gap: 4 }}>
+                        <span style={{ color: '#9ca3af' }}>{i + 1}.</span>
+                        <span>{s.popover.title}</span>
+                        {s.url && <span style={{ color: '#d1d5db' }}>({s.url})</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             /* Tasks tab */
             <div style={S.section}>
