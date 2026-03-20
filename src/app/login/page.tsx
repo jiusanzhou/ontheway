@@ -33,7 +33,6 @@ export default function LoginPage() {
       if (!res.ok || data.error) {
         setError(data.error || 'Something went wrong')
       } else if (isSignUp) {
-        // Account created, redirect to dashboard
         router.push('/dashboard')
         router.refresh()
       } else {
@@ -48,27 +47,27 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="border-b bg-white">
+    <div className="min-h-screen theme-bg-page flex flex-col">
+      <header className="border-b theme-border theme-bg-primary">
         <div className="max-w-6xl mx-auto px-4 py-3 sm:py-4">
-          <Link href="/" className="text-lg sm:text-xl font-bold">🛤️ OnTheWay</Link>
+          <Link href="/" className="text-lg sm:text-xl font-bold theme-text-primary">OnTheWay</Link>
         </div>
       </header>
 
       <main className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-sm">
-          <h1 className="text-2xl font-bold text-center mb-8">
+          <h1 className="text-2xl font-bold text-center mb-8 theme-text-primary">
             {isSignUp ? 'Create Account' : 'Sign In'}
           </h1>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Email</label>
+              <label className="block text-sm font-medium mb-1 theme-text-primary">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2"
+                className="w-full border rounded-lg px-3 py-2 theme-input"
                 placeholder="you@example.com"
                 required
                 autoFocus
@@ -76,26 +75,26 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Password</label>
+              <label className="block text-sm font-medium mb-1 theme-text-primary">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2"
-                placeholder="••••••••"
+                className="w-full border rounded-lg px-3 py-2 theme-input"
+                placeholder="--------"
                 required
                 minLength={6}
               />
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+              <div className="rounded-lg p-3 text-sm" style={{ backgroundColor: 'var(--danger)', color: '#fff', opacity: 0.9 }}>
                 {error}
               </div>
             )}
 
             {message && (
-              <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg p-3">
+              <div className="theme-success text-sm rounded-lg p-3">
                 {message}
               </div>
             )}
@@ -103,18 +102,18 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-black text-white py-2.5 rounded-lg hover:bg-gray-800 disabled:opacity-50"
+              className="w-full theme-accent py-2.5 rounded-lg disabled:opacity-50 transition-colors"
             >
               {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
             </button>
           </form>
 
-          <p className="text-center text-sm text-gray-500 mt-6">
+          <p className="text-center text-sm theme-text-secondary mt-6">
             {isSignUp ? 'Already have an account?' : "Don't have an account?"}
             {' '}
             <button
               onClick={() => { setIsSignUp(!isSignUp); setError(''); setMessage('') }}
-              className="text-blue-600 hover:text-blue-700"
+              className="theme-link"
             >
               {isSignUp ? 'Sign In' : 'Sign Up'}
             </button>
