@@ -2,20 +2,146 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ============ Theme: Light (default) ============ */
+:root,
+[data-theme="light"] {
+  --bg-page: #f9fafb;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f3f4f6;
+  --bg-tertiary: #e5e7eb;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --text-accent: #000000;
+  --border: #e5e7eb;
+  --accent: #000000;
+  --accent-hover: #374151;
+  --accent-text: #ffffff;
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --success-bg: #dcfce7;
+  --success-text: #15803d;
+  --badge-bg: #f3f4f6;
+  --badge-text: #6b7280;
+  --link: #2563eb;
+  --link-hover: #1d4ed8;
+  --shadow: 0 1px 3px rgba(0,0,0,0.1);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,0.1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ============ Theme: Dark ============ */
+[data-theme="dark"] {
+  --bg-page: #0f172a;
+  --bg-primary: #1e293b;
+  --bg-secondary: #334155;
+  --bg-tertiary: #475569;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --text-accent: #a5b4fc;
+  --border: #334155;
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-text: #ffffff;
+  --danger: #ef4444;
+  --danger-hover: #dc2626;
+  --success-bg: #064e3b;
+  --success-text: #6ee7b7;
+  --badge-bg: #334155;
+  --badge-text: #94a3b8;
+  --link: #818cf8;
+  --link-hover: #a5b4fc;
+  --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,0.4);
+}
+
+/* ============ Theme: Teal ============ */
+[data-theme="teal"] {
+  --bg-page: #0f2027;
+  --bg-primary: #163a3a;
+  --bg-secondary: #1a4a4a;
+  --bg-tertiary: #1e5a5a;
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --text-accent: #5eead4;
+  --border: #1e5a5a;
+  --accent: #14b8a6;
+  --accent-hover: #2dd4bf;
+  --accent-text: #042f2e;
+  --danger: #ef4444;
+  --danger-hover: #dc2626;
+  --success-bg: #064e3b;
+  --success-text: #6ee7b7;
+  --badge-bg: #1a4a4a;
+  --badge-text: #94a3b8;
+  --link: #5eead4;
+  --link-hover: #99f6e4;
+  --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,0.4);
+}
+
+/* ============ Semantic utility classes ============ */
+@layer utilities {
+  .theme-bg-page { background-color: var(--bg-page); }
+  .theme-bg-primary { background-color: var(--bg-primary); }
+  .theme-bg-secondary { background-color: var(--bg-secondary); }
+  .theme-bg-tertiary { background-color: var(--bg-tertiary); }
+
+  .theme-text-primary { color: var(--text-primary); }
+  .theme-text-secondary { color: var(--text-secondary); }
+  .theme-text-tertiary { color: var(--text-tertiary); }
+  .theme-text-accent { color: var(--text-accent); }
+
+  .theme-border { border-color: var(--border); }
+  .theme-shadow { box-shadow: var(--shadow); }
+  .theme-shadow-lg { box-shadow: var(--shadow-lg); }
+
+  .theme-accent {
+    background-color: var(--accent);
+    color: var(--accent-text);
+  }
+  .theme-accent:hover {
+    background-color: var(--accent-hover);
+  }
+
+  .theme-badge {
+    background-color: var(--badge-bg);
+    color: var(--badge-text);
+  }
+
+  .theme-success {
+    background-color: var(--success-bg);
+    color: var(--success-text);
+  }
+
+  .theme-danger {
+    background-color: var(--danger);
+    color: #ffffff;
+  }
+  .theme-danger:hover {
+    background-color: var(--danger-hover);
+  }
+
+  .theme-link {
+    color: var(--link);
+  }
+  .theme-link:hover {
+    color: var(--link-hover);
+  }
+
+  .theme-input {
+    background-color: var(--bg-primary);
+    border-color: var(--border);
+    color: var(--text-primary);
+  }
+  .theme-input::placeholder {
+    color: var(--text-tertiary);
   }
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
+  color: var(--text-primary);
+  background: var(--bg-page);
   font-family: system-ui, -apple-system, sans-serif;
 }

@@ -35,25 +35,25 @@ export default function NewProjectPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b sticky top-0 z-10">
+    <div className="min-h-screen theme-bg-page">
+      <header className="theme-bg-primary border-b theme-border sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-3 sm:py-4 flex items-center gap-4">
-          <Link href="/dashboard" className="text-gray-500 hover:text-gray-700">← Back</Link>
-          <span className="font-medium">New Project</span>
+          <Link href="/dashboard" className="theme-text-secondary hover:theme-text-primary transition-colors">← Back</Link>
+          <span className="font-medium theme-text-primary">New Project</span>
         </div>
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-8 sm:py-12">
-        <h1 className="text-xl sm:text-2xl font-bold mb-6">Create Project</h1>
+        <h1 className="text-xl sm:text-2xl font-bold mb-6 theme-text-primary">Create Project</h1>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Project Name *</label>
+            <label className="block text-sm font-medium mb-1 theme-text-primary">Project Name *</label>
             <input
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2"
+              className="w-full border rounded-lg px-3 py-2 theme-input"
               placeholder="My App"
               required
               autoFocus
@@ -61,19 +61,19 @@ export default function NewProjectPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Domain</label>
+            <label className="block text-sm font-medium mb-1 theme-text-primary">Domain</label>
             <input
               type="text"
               value={domain}
               onChange={e => setDomain(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2"
+              className="w-full border rounded-lg px-3 py-2 theme-input"
               placeholder="myapp.com"
             />
-            <p className="text-xs text-gray-500 mt-1">Optional. The domain where your app runs.</p>
+            <p className="text-xs theme-text-tertiary mt-1">Optional. The domain where your app runs.</p>
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+            <div className="rounded-lg p-3 text-sm" style={{ backgroundColor: 'var(--danger)', color: '#fff', opacity: 0.9 }}>
               {error}
             </div>
           )}
@@ -81,7 +81,7 @@ export default function NewProjectPage() {
           <button
             type="submit"
             disabled={loading || !name.trim()}
-            className="w-full bg-black text-white py-2.5 rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full theme-accent py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? 'Creating...' : 'Create Project'}
           </button>

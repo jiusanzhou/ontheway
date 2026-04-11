@@ -103,14 +103,14 @@ export default function TaskEditor({ projectId, task }: { projectId: string; tas
         }),
       })
       if (res.ok) {
-        setSaveMsg('✅ Saved')
+        setSaveMsg('Saved')
         setTimeout(() => setSaveMsg(''), 2000)
       } else {
         const err = await res.json()
-        setSaveMsg('❌ ' + (err.error || 'Failed'))
+        setSaveMsg('Error: ' + (err.error || 'Failed'))
       }
     } catch {
-      setSaveMsg('❌ Network error')
+      setSaveMsg('Error: Network error')
     }
     setSaving(false)
   }
@@ -125,38 +125,38 @@ export default function TaskEditor({ projectId, task }: { projectId: string; tas
       if (res.ok) {
         router.push(`/dashboard/projects/${projectId}`)
       } else {
-        setSaveMsg('❌ Failed to delete')
+        setSaveMsg('Error: Failed to delete')
       }
     } catch {
-      setSaveMsg('❌ Network error')
+      setSaveMsg('Error: Network error')
     }
     setDeleting(false)
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen theme-bg-page flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b flex-shrink-0">
+      <header className="theme-bg-primary border-b theme-border flex-shrink-0">
         <div className="px-3 sm:px-4 py-2.5 sm:py-3 flex justify-between items-center gap-2">
           <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             <button
               onClick={() => mobileView === 'editor' ? setMobileView('steps') : undefined}
-              className="sm:hidden text-gray-500 shrink-0"
+              className="sm:hidden theme-text-secondary shrink-0"
             >
               {mobileView === 'editor' ? '←' : ''}
             </button>
-            <Link href={`/dashboard/projects/${projectId}`} className="text-gray-500 hover:text-gray-700 hidden sm:inline shrink-0">
+            <Link href={`/dashboard/projects/${projectId}`} className="theme-text-secondary hover:theme-text-primary hidden sm:inline shrink-0 transition-colors">
               ← Back
             </Link>
-            <span className="font-medium text-sm sm:text-base truncate">{taskName}</span>
-            <span className="text-xs text-gray-400 hidden sm:inline">({taskSlug})</span>
+            <span className="font-medium text-sm sm:text-base truncate theme-text-primary">{taskName}</span>
+            <span className="text-xs theme-text-tertiary hidden sm:inline">({taskSlug})</span>
           </div>
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-            {saveMsg && <span className="text-xs hidden sm:inline">{saveMsg}</span>}
+            {saveMsg && <span className="text-xs hidden sm:inline theme-text-secondary">{saveMsg}</span>}
             <button
               onClick={saveTask}
               disabled={saving}
-              className="px-2.5 sm:px-4 py-1.5 sm:py-2 bg-black text-white rounded-lg text-xs sm:text-sm hover:bg-gray-800 disabled:opacity-50"
+              className="px-2.5 sm:px-4 py-1.5 sm:py-2 theme-accent rounded-lg text-xs sm:text-sm disabled:opacity-50 transition-colors"
             >
               {saving ? '...' : 'Save'}
             </button>
@@ -167,61 +167,61 @@ export default function TaskEditor({ projectId, task }: { projectId: string; tas
       <div className="flex-1 flex overflow-hidden">
         {/* Left panel */}
         <aside className={`
-          w-full sm:w-80 bg-white border-r flex flex-col shrink-0
+          w-full sm:w-80 theme-bg-primary border-r theme-border flex flex-col shrink-0
           ${mobileView === 'steps' ? 'flex' : 'hidden sm:flex'}
         `}>
           {/* Task settings */}
-          <div className="p-3 sm:p-4 border-b space-y-3">
+          <div className="p-3 sm:p-4 border-b theme-border space-y-3">
             <div className="flex items-center gap-2 sm:hidden">
-              <Link href={`/dashboard/projects/${projectId}`} className="text-gray-400 hover:text-gray-600 text-sm">←</Link>
-              <span className="font-medium text-sm">Task Settings</span>
+              <Link href={`/dashboard/projects/${projectId}`} className="theme-text-tertiary hover:theme-text-secondary text-sm">←</Link>
+              <span className="font-medium text-sm theme-text-primary">Task Settings</span>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Name</label>
+              <label className="block text-sm font-medium mb-1 theme-text-primary">Name</label>
               <input type="text" value={taskName} onChange={e => setTaskName(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm" />
+                className="w-full border rounded-lg px-3 py-2 text-sm theme-input" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Slug</label>
+              <label className="block text-sm font-medium mb-1 theme-text-primary">Slug</label>
               <input type="text" value={taskSlug} onChange={e => setTaskSlug(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm font-mono" />
+                className="w-full border rounded-lg px-3 py-2 text-sm font-mono theme-input" />
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="block text-sm font-medium mb-1">Trigger</label>
+                <label className="block text-sm font-medium mb-1 theme-text-primary">Trigger</label>
                 <select value={trigger} onChange={e => setTrigger(e.target.value as typeof trigger)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm">
+                  className="w-full border rounded-lg px-3 py-2 text-sm theme-input">
                   <option value="manual">Manual</option>
                   <option value="auto">Auto</option>
                   <option value="first-visit">First Visit</option>
                 </select>
               </div>
               <div className="flex items-end pb-1">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <label className="flex items-center gap-2 text-sm cursor-pointer theme-text-primary">
                   <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} className="rounded" />
                   Enabled
                 </label>
               </div>
             </div>
             <button onClick={deleteTask} disabled={deleting}
-              className="text-xs text-red-500 hover:text-red-600">
+              className="text-xs hover:opacity-80" style={{ color: 'var(--danger)' }}>
               {deleting ? 'Deleting...' : 'Delete Task'}
             </button>
           </div>
 
           {/* Steps list */}
-          <div className="p-3 sm:p-4 border-b">
-            <button onClick={addStep} className="w-full py-2 rounded-lg text-sm font-medium border hover:bg-gray-50">
+          <div className="p-3 sm:p-4 border-b theme-border">
+            <button onClick={addStep} className="w-full py-2 rounded-lg text-sm font-medium border theme-border hover:theme-bg-secondary theme-text-primary transition-colors">
               + Add Step
             </button>
           </div>
 
           <div className="flex-1 overflow-auto p-2">
             <div className="flex justify-between items-center px-1 mb-2">
-              <span className="text-xs font-medium text-gray-500">Steps ({steps.length})</span>
+              <span className="text-xs font-medium theme-text-tertiary">Steps ({steps.length})</span>
             </div>
             {steps.length === 0 ? (
-              <div className="text-center py-6 text-gray-400 text-sm">No steps yet</div>
+              <div className="text-center py-6 theme-text-tertiary text-sm">No steps yet</div>
             ) : (
               steps.map((step, index) => (
                 <div
@@ -229,21 +229,21 @@ export default function TaskEditor({ projectId, task }: { projectId: string; tas
                   onClick={() => { setSelectedStep(step._id); setMobileView('editor') }}
                   className={`p-3 rounded-lg cursor-pointer mb-1.5 ${
                     selectedStep === step._id
-                      ? 'bg-blue-50 border border-blue-200'
-                      : 'hover:bg-gray-50 border border-transparent'
+                      ? 'theme-bg-secondary border theme-border'
+                      : 'hover:theme-bg-secondary border border-transparent'
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="w-5 h-5 bg-gray-200 rounded-full text-xs flex items-center justify-center shrink-0">{index + 1}</span>
-                    <span className="font-medium text-sm truncate flex-1">{step.title}</span>
+                    <span className="w-5 h-5 theme-bg-tertiary rounded-full text-xs flex items-center justify-center shrink-0 theme-text-primary">{index + 1}</span>
+                    <span className="font-medium text-sm truncate flex-1 theme-text-primary">{step.title}</span>
                     <div className="flex gap-1">
                       <button onClick={e => { e.stopPropagation(); moveStep(step._id, 'up') }} disabled={index === 0}
-                        className="text-gray-400 hover:text-gray-600 text-xs">↑</button>
+                        className="theme-text-tertiary hover:theme-text-primary text-xs">↑</button>
                       <button onClick={e => { e.stopPropagation(); moveStep(step._id, 'down') }} disabled={index === steps.length - 1}
-                        className="text-gray-400 hover:text-gray-600 text-xs">↓</button>
+                        className="theme-text-tertiary hover:theme-text-primary text-xs">↓</button>
                     </div>
                   </div>
-                  <div className="text-xs text-gray-500 truncate pl-7">{step.selector || 'No selector'}</div>
+                  <div className="text-xs theme-text-secondary truncate pl-7">{step.selector || 'No selector'}</div>
                 </div>
               ))
             )}
@@ -258,39 +258,39 @@ export default function TaskEditor({ projectId, task }: { projectId: string; tas
           {currentStep ? (
             <div className="p-4 sm:p-6">
               <div className="max-w-2xl mx-auto sm:mx-0">
-                <div className="bg-white rounded-lg border p-4 sm:p-6">
+                <div className="theme-bg-primary rounded-lg border theme-border p-4 sm:p-6">
                   <div className="flex justify-between items-start mb-4 sm:mb-6">
-                    <h2 className="text-base sm:text-lg font-bold">
+                    <h2 className="text-base sm:text-lg font-bold theme-text-primary">
                       Edit Step {steps.findIndex(s => s._id === currentStep._id) + 1}
                     </h2>
                     <button onClick={() => deleteStep(currentStep._id)}
-                      className="text-red-500 hover:text-red-600 text-sm">Delete</button>
+                      className="text-sm" style={{ color: 'var(--danger)' }}>Delete</button>
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1">CSS Selector</label>
+                      <label className="block text-sm font-medium mb-1 theme-text-primary">CSS Selector</label>
                       <input type="text" value={currentStep.selector}
                         onChange={e => updateStep(currentStep._id, { selector: e.target.value })}
-                        className="w-full border rounded-lg px-3 py-2 text-sm font-mono" placeholder="#element-id" />
+                        className="w-full border rounded-lg px-3 py-2 text-sm font-mono theme-input" placeholder="#element-id" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Title</label>
+                      <label className="block text-sm font-medium mb-1 theme-text-primary">Title</label>
                       <input type="text" value={currentStep.title}
                         onChange={e => updateStep(currentStep._id, { title: e.target.value })}
-                        className="w-full border rounded-lg px-3 py-2 text-sm" />
+                        className="w-full border rounded-lg px-3 py-2 text-sm theme-input" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Description</label>
+                      <label className="block text-sm font-medium mb-1 theme-text-primary">Description</label>
                       <textarea value={currentStep.content}
                         onChange={e => updateStep(currentStep._id, { content: e.target.value })}
-                        className="w-full border rounded-lg px-3 py-2 h-20 sm:h-24 resize-none text-sm" />
+                        className="w-full border rounded-lg px-3 py-2 h-20 sm:h-24 resize-none text-sm theme-input" />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm font-medium mb-1">Position</label>
+                        <label className="block text-sm font-medium mb-1 theme-text-primary">Position</label>
                         <select value={currentStep.position}
                           onChange={e => updateStep(currentStep._id, { position: e.target.value as Step['position'] })}
-                          className="w-full border rounded-lg px-3 py-2 text-sm">
+                          className="w-full border rounded-lg px-3 py-2 text-sm theme-input">
                           <option value="auto">Auto</option>
                           <option value="top">Top</option>
                           <option value="bottom">Bottom</option>
@@ -299,7 +299,7 @@ export default function TaskEditor({ projectId, task }: { projectId: string; tas
                         </select>
                       </div>
                       <div className="flex items-end pb-1">
-                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <label className="flex items-center gap-2 text-sm cursor-pointer theme-text-primary">
                           <input type="checkbox" checked={currentStep.spotlight}
                             onChange={e => updateStep(currentStep._id, { spotlight: e.target.checked })}
                             className="rounded" />
@@ -311,30 +311,30 @@ export default function TaskEditor({ projectId, task }: { projectId: string; tas
                 </div>
 
                 {/* Preview */}
-                <div className="mt-4 sm:mt-6 bg-white rounded-lg border p-4 sm:p-6">
-                  <h3 className="font-medium mb-3 text-sm">Preview</h3>
-                  <div className="bg-gray-100 rounded-lg p-4 sm:p-8 flex items-center justify-center">
-                    <div className="bg-white rounded-lg shadow-xl p-4 max-w-xs w-full border text-left">
-                      <h4 className="font-bold mb-2 text-sm">{currentStep.title || 'Step Title'}</h4>
-                      <p className="text-xs text-gray-600 mb-3">{currentStep.content || 'Description...'}</p>
+                <div className="mt-4 sm:mt-6 theme-bg-primary rounded-lg border theme-border p-4 sm:p-6">
+                  <h3 className="font-medium mb-3 text-sm theme-text-primary">Preview</h3>
+                  <div className="theme-bg-secondary rounded-lg p-4 sm:p-8 flex items-center justify-center">
+                    <div className="theme-bg-primary rounded-lg p-4 max-w-xs w-full border theme-border text-left" style={{ boxShadow: 'var(--shadow-lg)' }}>
+                      <h4 className="font-bold mb-2 text-sm theme-text-primary">{currentStep.title || 'Step Title'}</h4>
+                      <p className="text-xs theme-text-secondary mb-3">{currentStep.content || 'Description...'}</p>
                       <div className="flex justify-between">
-                        <button className="text-xs text-gray-500">Skip</button>
-                        <button className="text-xs bg-black text-white px-3 py-1 rounded">Next</button>
+                        <button className="text-xs theme-text-tertiary">Skip</button>
+                        <button className="text-xs theme-accent px-3 py-1 rounded">Next</button>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {saveMsg && <div className="mt-4 text-center text-sm sm:hidden">{saveMsg}</div>}
+                {saveMsg && <div className="mt-4 text-center text-sm sm:hidden theme-text-secondary">{saveMsg}</div>}
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-center h-full text-gray-500 p-4">
+            <div className="flex items-center justify-center h-full theme-text-secondary p-4">
               <div className="text-center">
                 <div className="text-5xl mb-4">📝</div>
-                <h3 className="text-lg font-medium mb-2">Select a Step</h3>
+                <h3 className="text-lg font-medium mb-2 theme-text-primary">Select a Step</h3>
                 <p className="text-sm mb-4">Choose a step to edit, or add a new one.</p>
-                <button onClick={addStep} className="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50">+ Add Step</button>
+                <button onClick={addStep} className="px-4 py-2 border theme-border rounded-lg text-sm hover:theme-bg-secondary theme-text-primary transition-colors">+ Add Step</button>
               </div>
             </div>
           )}

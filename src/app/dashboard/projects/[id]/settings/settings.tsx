@@ -60,17 +60,17 @@ export default function ProjectSettings({ project }: { project: Project }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b">
+    <div className="min-h-screen theme-bg-page">
+      <header className="theme-bg-primary border-b theme-border">
         <div className="max-w-3xl mx-auto px-4 py-3 sm:py-4 flex justify-between items-center">
           <div className="flex items-center gap-2 sm:gap-4">
-            <Link href={`/dashboard/projects/${project.id}`} className="text-gray-500 hover:text-gray-700">← Back</Link>
-            <span className="font-medium text-sm sm:text-base">Settings</span>
+            <Link href={`/dashboard/projects/${project.id}`} className="theme-text-secondary hover:theme-text-primary transition-colors">← Back</Link>
+            <span className="font-medium text-sm sm:text-base theme-text-primary">Settings</span>
           </div>
           <div className="flex items-center gap-3">
             {msg && <span className="text-xs">{msg}</span>}
             <button onClick={save} disabled={saving}
-              className="px-4 py-2 bg-black text-white rounded-lg text-sm hover:bg-gray-800 disabled:opacity-50">
+              className="px-4 py-2 theme-accent rounded-lg text-sm disabled:opacity-50 transition-colors">
               {saving ? '...' : 'Save'}
             </button>
           </div>
@@ -79,49 +79,49 @@ export default function ProjectSettings({ project }: { project: Project }) {
 
       <main className="max-w-3xl mx-auto px-4 py-6 sm:py-8 space-y-6">
         {/* General */}
-        <div className="bg-white rounded-lg border p-4 sm:p-6">
-          <h2 className="font-bold mb-4">General</h2>
+        <div className="theme-bg-primary rounded-lg border theme-border p-4 sm:p-6">
+          <h2 className="font-bold mb-4 theme-text-primary">General</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Project Name</label>
-              <input type="xt" value={name} onChange={e => setName(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm" />
+              <label className="block text-sm font-medium mb-1 theme-text-primary">Project Name</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm theme-input" />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Domain</label>
+              <label className="block text-sm font-medium mb-1 theme-text-primary">Domain</label>
               <input type="text" value={domain} onChange={e => setDomain(e.target.value)}
-                placeholder="example.com" className="w-full border rounded-lg px-3 py-2 text-sm" />
-              <p className="text-xs text-gray-500 mt-1">Optional. Used for domain validation in production.</p>
+                placeholder="example.com" className="w-full border rounded-lg px-3 py-2 text-sm theme-input" />
+              <p className="text-xs theme-text-tertiary mt-1">Optional. Used for domain validation in production.</p>
             </div>
           </div>
         </div>
 
         {/* API Key */}
-        <div className="bg-white rounded-lg border p-4 sm:p-6">
-          <h2 className="font-bold mb-4">API Key</h2>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <code className="text-xs sm:text-sm break-all select-all">{project.api_key}</code>
+        <div className="theme-bg-primary rounded-lg border theme-border p-4 sm:p-6">
+          <h2 className="font-bold mb-4 theme-text-primary">API Key</h2>
+          <div className="theme-bg-secondary rounded-lg p-3">
+            <code className="text-xs sm:text-sm break-all select-all theme-text-secondary">{project.api_key}</code>
           </div>
-          <p className="text-xs text-gray-500 mt-2">Use this key for API access. Keep it secret.</p>
+          <p className="text-xs theme-text-tertiary mt-2">Use this key for API access. Keep it secret.</p>
         </div>
 
         {/* Danger Zone */}
-        <div className="bg-white rounded-lg border border-red-200 p-4 sm:p-6">
-          <h2 className="font-bold text-red-600 mb-2">Danger Zone</h2>
-          <p className="text-sm text-gray-600 mb-4">
+        <div className="theme-bg-primary rounded-lg border p-4 sm:p-6" style={{ borderColor: 'var(--danger)' }}>
+          <h2 className="font-bold mb-2" style={{ color: 'var(--danger)' }}>Danger Zone</h2>
+          <p className="text-sm theme-text-secondary mb-4">
             Deleting this project will permanently remove all tasks and analytics data.
           </p>
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Type <span className="font-mono text-red-600">{project.name}</span> to confirm
+              <label className="block text-sm font-medium mb-1 theme-text-primary">
+                Type <span className="font-mono" style={{ color: 'var(--danger)' }}>{project.name}</span> to confirm
               </label>
               <input type="text" value={confirmDelete} onChange={e => setConfirmDelete(e.target.value)}
-                placeholder={project.name} className="w-full border border-red-200 rounded-lg px-3 py-2 text-sm" />
+                placeholder={project.name} className="w-full border rounded-lg px-3 py-2 text-sm theme-input" style={{ borderColor: 'var(--danger)' }} />
             </div>
             <button onClick={deleteProject}
               disabled={confirmDelete !== project.name || deleting}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
+              className="px-4 py-2 theme-danger rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
               {deleting ? 'Deleting...' : 'Delete Project'}
             </button>
           </div>
