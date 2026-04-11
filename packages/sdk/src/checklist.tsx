@@ -46,16 +46,37 @@ export interface OnTheWayChecklistProps {
 // ---- Storage helpers ----
 
 const STORAGE_KEY_PREFIX = 'otw_checklist_'
+const SDK_COMPLETED_PREFIX = 'otw_completed_'
 
+/**
+ * Get completed slugs by merging both checklist-local and SDK-level storage.
+ * The SDK stores completed task IDs in `otw_completed_<projectId>` when a tour
+ * finishes, while the checklist component tracks its own state in
+ * `otw_checklist_<projectId>`. Merging both ensures the checklist reflects
+ * completions from either source on first render (no flash).
+ */
 function getCompletedSlugs(projectId: string): Set<string> {
   if (typeof localStorage === 'undefined') return new Set()
+  const merged = new Set<string>()
+  // Read checklist-local storage
   try {
     const raw = localStorage.getItem(STORAGE_KEY_PREFIX + projectId)
-    if (raw) return new Set(JSON.parse(raw))
+    if (raw) {
+      for (const s of JSON.parse(raw)) merged.add(s)
+    }
   } catch {
     // ignore
   }
-  return new Set()
+  // Read SDK-level completed storage
+  try {
+    const raw = localStorage.getItem(SDK_COMPLETED_PREFIX + projectId)
+    if (raw) {
+      for (const s of JSON.parse(raw)) merged.add(s)
+    }
+  } catch {
+    // ignore
+  }
+  return merged
 }
 
 function saveCompletedSlugs(projectId: string, slugs: Set<string>) {
@@ -93,8 +114,16 @@ export function OnTheWayChecklist({
 }: OnTheWayChecklistProps) {
   const { otw, ready, start, isTaskCompleted } = useOnTheWay()
   const [expanded, setExpanded] = useState(true)
-  const [completedSlugs, setCompletedSlugs] = useState<Set<string>>(new Set())
-  const [hidden, setHidden] = useState(false)
+  const [completedSlugs, setCompletedSlugs] = useState<Set<string>>(() => {
+    // Synchronous init: merge both storage keys to avoid flash
+    const pid = otw?.getProjectId() ?? 'default'
+    return getCompletedSlugs(pid)
+  })
+  // If all required tasks are already done on mount, start hidden (no flash)
+  const [hidden, setHidden] = useState(() => {
+    const required = tasks.filter(t => t.required !== false)
+    return autoHide && required.length > 0 && required.every(t => completedSlugs.has(t.slug))
+  })
   const [celebrating, setCelebrating] = useState(false)
   const allCompleteFired = useRef(false)
 
@@ -104,11 +133,16 @@ export function OnTheWayChecklist({
   const title = titleProp ?? sdkT?.checklistTitle ?? 'Getting Started'
   const completedText = sdkT?.checklistCompleted ?? 'All done!'
 
-  // Load persisted state
+  // Sync with persisted state when projectId changes (rare)
   useEffect(() => {
     const stored = getCompletedSlugs(projectId)
-    if (stored.size > 0) setCompletedSlugs(stored)
-  }, [projectId])
+    if (stored.size > 0 && stored.size !== completedSlugs.size) {
+      const merged = new Set([...completedSlugs, ...stored])
+      if (merged.size !== completedSlugs.size) {
+        setCompletedSlugs(merged)
+      }
+    }
+  }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll for newly completed tasks (the SDK marks them on tour finish)
   useEffect(() => {
