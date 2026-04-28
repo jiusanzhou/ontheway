@@ -189,5 +189,18 @@ export async function requireUser(): Promise<{ id: string; email: string }> {
   return user
 }
 
+// Establish a session for an existing userId (used by OAuth callbacks)
+export async function createSession(userId: string): Promise<void> {
+  const token = await signSession(userId)
+  const cookieStore = await cookies()
+  cookieStore.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 30, // 30 days
+  })
+}
+
 // Export for middleware use (doesn't need DB, just verifies cookie signature)
 export { verifySessionToken, COOKIE_NAME }
